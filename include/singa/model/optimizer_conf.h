@@ -601,7 +601,7 @@ private:
 
 	// SINGA: add by xiangrui
 	// cudnn workspace size in MB
-	int32_t workspace_byte_limit_ = 1024;
+	int32_t workspace_byte_limit_ = 8192;
 
 	// cudnn algorithm preference
 	// options: "fastest", "limited_workspace", "no_workspace"

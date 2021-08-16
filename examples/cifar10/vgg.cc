@@ -1,3 +1,24 @@
+/************************************************************
+*
+* Licensed to the Apache Software Foundation (ASF) under one
+* or more contributor license agreements.  See the NOTICE file
+* distributed with this work for additional information
+* regarding copyright ownership.  The ASF licenses this file
+* to you under the Apache License, Version 2.0 (the
+* "License"); you may not use this file except in compliance
+* with the License.  You may obtain a copy of the License at
+*
+*   http://www.apache.org/licenses/LICENSE-2.0
+*
+* Unless required by applicable law or agreed to in writing,
+* software distributed under the License is distributed on an
+* "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+* KIND, either express or implied.  See the License for the
+* specific language governing permissions and limitations
+* under the License.
+*
+*************************************************************/
+
 #include "./cifar10.h"
 #include "singa/model/feed_forward_net.h"
 #include "singa/model/optimizer.h"
@@ -118,7 +139,7 @@ namespace singa
 
 	// Based on: https://github.com/chengyangfu/pytorch-vgg-cifar10/blob/master/vgg.py
 	// // (also https://github.com/kuangliu/pytorch-cifar/blob/master/models/vgg.py)
-	FeedForwardNet CreateNet()
+	FeedForwardNet CreateNetVGG11()
 	{
 		// make layers
 		FeedForwardNet net;
@@ -144,6 +165,54 @@ namespace singa
 		net.Add(GenReLUConf("relu7"));
 		net.Add(GenConvConf("conv8", 512, 3, 1, 1));
 		net.Add(GenReLUConf("relu8"));
+		net.Add(GenPoolingConf("pool5", true, 2, 2, 0));
+		net.Add(GenFlattenConf("flat"));
+		net.Add(GenDropoutConf("drop1", 0.5));
+		net.Add(GenDenseConf("lin1", 512));
+		net.Add(GenReLUConf("relu9"));
+		net.Add(GenDropoutConf("drop2", 0.5));
+		net.Add(GenDenseConf("lin2", 512));
+		net.Add(GenReLUConf("relu10"));
+		net.Add(GenDenseConf("lin3", 10));
+		return net;
+	}
+
+	FeedForwardNet CreateNetVGG16()
+	{
+		// make layers
+		FeedForwardNet net;
+		Shape s{3, 32, 32};
+
+		net.Add(GenConvConf("conv1", 64, 3, 1, 1), &s);
+		net.Add(GenReLUConf("relu1"));
+		net.Add(GenConvConf("conv2", 64, 3, 1, 1));
+		net.Add(GenReLUConf("relu2"));
+		net.Add(GenPoolingConf("pool1", true, 2, 2, 0));
+		net.Add(GenConvConf("conv3", 128, 3, 1, 1));
+		net.Add(GenReLUConf("relu3"));
+		net.Add(GenConvConf("conv4", 128, 3, 1, 1));
+		net.Add(GenReLUConf("relu4"));
+		net.Add(GenPoolingConf("pool2", true, 2, 2, 0));
+		net.Add(GenConvConf("conv5", 256, 3, 1, 1));
+		net.Add(GenReLUConf("relu5"));
+		net.Add(GenConvConf("conv6", 256, 3, 1, 1));
+		net.Add(GenReLUConf("relu6"));
+		net.Add(GenConvConf("conv7", 256, 3, 1, 1));
+		net.Add(GenReLUConf("relu7"));
+		net.Add(GenPoolingConf("pool3", true, 2, 2, 0));
+		net.Add(GenConvConf("conv8", 512, 3, 1, 1));
+		net.Add(GenReLUConf("relu8"));
+		net.Add(GenConvConf("conv9", 512, 3, 1, 1));
+		net.Add(GenReLUConf("relu9"));
+		net.Add(GenConvConf("conv10", 512, 3, 1, 1));
+		net.Add(GenReLUConf("relu10"));
+		net.Add(GenPoolingConf("pool4", true, 2, 2, 0));
+		net.Add(GenConvConf("conv11", 512, 3, 1, 1));
+		net.Add(GenReLUConf("relu11"));
+		net.Add(GenConvConf("conv12", 512, 3, 1, 1));
+		net.Add(GenReLUConf("relu12"));
+		net.Add(GenConvConf("conv13", 512, 3, 1, 1));
+		net.Add(GenReLUConf("relu13"));		
 		net.Add(GenPoolingConf("pool5", true, 2, 2, 0));
 		net.Add(GenFlattenConf("flat"));
 		net.Add(GenDropoutConf("drop1", 0.5));
@@ -183,7 +252,7 @@ namespace singa
 		CHECK_EQ(test_x.shape(0), test_y.shape(0));
 		LOG(INFO) << "Training samples = " << train_y.shape(0)
 				  << ", Test samples = " << test_y.shape(0);
-		auto net = CreateNet();
+		auto net = CreateNetVGG16();
 		SGD sgd;
 		OptimizerConf opt_conf;
 		opt_conf.set_momentum(0.9);
