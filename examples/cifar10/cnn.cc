@@ -325,11 +325,11 @@ int main(int argc, char **argv) {
   pos = singa::ArgPos(argc, argv, "-data");
   string data = "cifar-10-batches-bin";
   if (pos != -1) data = argv[pos + 1];
-/*
+
   LOG(INFO) << "Start training";
   singa::Train(nEpoch, data);
   LOG(INFO) << "End training";
-*/
+
   LOG(INFO) << "Start evaluation";
   singa::Eval(data);
   LOG(INFO) << "End evaluation";
