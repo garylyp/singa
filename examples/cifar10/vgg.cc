@@ -191,7 +191,7 @@ namespace singa
 		reg->set_coefficient(0.0005);
 		sgd.Setup(opt_conf);
 		sgd.SetLearningRateGenerator([](int step) {
-			return 0.01f / static_cast<float>(1u << (epoch/30));
+			return 0.01f / static_cast<float>(1u << (step/30));
 		});
 
 		SoftmaxCrossEntropy loss;
