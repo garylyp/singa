@@ -319,7 +319,7 @@ namespace singa
 		}
 		CHECK_EQ(test_x.shape(0), test_y.shape(0));
 		LOG(INFO) << "Test samples = " << test_y.shape(0);
-		auto net = CreateNet();
+		auto net = CreateNetVGG16();
 		SGD sgd;
 		OptimizerConf opt_conf;
 		opt_conf.set_momentum(0.9);
