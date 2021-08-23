@@ -24,7 +24,11 @@
 #include <vector>
 
 #include "singa/core/tensor.h"
+#ifndef LITE_POSIT
 #include "singa/proto/model.pb.h"
+#else
+#include "singa/model/optimizer_conf.h"
+#endif
 
 using std::string;
 using std::vector;

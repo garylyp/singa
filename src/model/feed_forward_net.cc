@@ -42,7 +42,7 @@ std::shared_ptr<Layer> FeedForwardNet::Add(const LayerConf& conf,
   else
     layer->Setup(*sample_shape, conf);
   Add(layer);
-  LOG(INFO) << layer->name() << VecToStr(layer->GetOutputSampleShape());
+  // LOG(INFO) << layer->name() << VecToStr(layer->GetOutputSampleShape());
   return layer;
 }
 
@@ -57,6 +57,31 @@ const vector<Tensor> FeedForwardNet::GetParamValues() const {
   for (auto layer : layers_)
     for (const auto value : layer->param_values()) values.push_back(value);
   return values;
+}
+
+const int FeedForwardNet::SetParamValues(vector<std::pair<std::string, Tensor>> params) const {
+
+	for (auto layer : layers_) {
+		vector<string> paramNames = layer->param_names();
+		for (auto layerParamNamesIter = paramNames.begin();
+				layerParamNamesIter != paramNames.end();
+				layerParamNamesIter++) {
+
+			// LOG(INFO) << "Layer param: " << layerParamNamesIter->c_str();
+
+			for (auto paramsIter = params.begin(); paramsIter != params.end(); paramsIter++) {
+
+				// LOG(INFO) << "\tParam: " << paramsIter->first;
+
+				if (layerParamNamesIter->c_str() != NULL && paramsIter->first.compare(layerParamNamesIter->c_str()) == 0) {
+					// LOG(INFO) << "Found match " << layerParamNamesIter->c_str();
+					layer->set_param(*layerParamNamesIter, paramsIter->second);
+				}
+			}
+		}
+	}
+
+	return 0;
 }
 
 const vector<ParamSpec> FeedForwardNet::GetParamSpecs() const {
@@ -91,7 +116,7 @@ void FeedForwardNet::Compile(bool shuffle, bool to_register,
     }
     auto init = CreateInitializer(specs[k].filler());
     init->Fill(params[k]);
-    LOG(INFO) << specs[k].name() << " : " << params[k].L1();
+    // LOG(INFO) << specs[k].name() << " : " << params[k].L1();
   }
 }
 
@@ -130,7 +155,7 @@ void FeedForwardNet::Train(size_t batchsize, int nb_epoch, const Tensor& x,
                            const Tensor& y, float val_split) {
   CHECK_EQ(x.shape(0), y.shape(0)) << "Diff num of sampels in x and y";
   size_t num_train = (size_t) (x.shape(0) * val_split);
-  if (val_split == 0.0f) {
+  if (val_split == const_float_zero) {
     Tensor dummy;
     Train(batchsize, nb_epoch, x, y, dummy, dummy);
   } else {
@@ -159,7 +184,7 @@ void FeedForwardNet::Train(size_t batchsize, int nb_epoch, const Tensor& x,
   for (size_t i = 0; i < x.shape(0) / batchsize; i++) index.push_back(i);
   for (int epoch = 0; epoch < nb_epoch; epoch++) {
     if (shuffle_) std::random_shuffle(index.begin(), index.end());
-    float loss = 0.0f, metric = 0.0f;
+    float loss = const_float_zero, metric = const_float_zero;
     size_t b = 0;
     for (; b < x.shape(0) / batchsize; b++) {
       size_t idx = index[b];
@@ -272,7 +297,25 @@ std::pair<Tensor, Tensor> FeedForwardNet::EvaluateOnBatch(const Tensor& x,
   const Tensor fea = Forward(flag, x);
   const Tensor l = loss_->Forward(flag, fea, y);
   const Tensor m = metric_->Forward(fea, y);
+  // float val = metric_->Evaluate(fea, y);
+  // LOG(INFO) << "EvaluateOnBatch metric: " << val;
   return std::make_pair(l, m);
+}
+
+std::pair<Tensor, Tensor> FeedForwardNet::EvaluateOnBatchAccuracy(const Tensor& x,
+                                                          const Tensor& y, float* acc) {
+  int flag = kEval;
+  const Tensor fea = Forward(flag, x);
+  const Tensor l = loss_->Forward(flag, fea, y);
+  const Tensor m = metric_->Forward(fea, y);
+  *acc = metric_->Evaluate(fea, y);
+  return std::make_pair(l, m);
+}
+
+Tensor FeedForwardNet::EvaluateOnBatchOutput(const Tensor& x, const Tensor& y) {
+  int flag = kEval;
+  const Tensor fea = Forward(flag, x);
+  return fea;
 }
 
 const Tensor FeedForwardNet::Predict(const Tensor& x, size_t batchsize) {

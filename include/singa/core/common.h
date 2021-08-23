@@ -47,6 +47,82 @@ using std::atomic;
 
 namespace singa {
 
+#ifdef LITE_POSIT
+
+enum LangType : int {
+  kCpp = 0,
+  kCuda = 1,
+  kOpencl = 2,
+  kNumDeviceType = 4
+};
+
+enum DataType : int {
+  kFloat32 = 0,
+  kFloat16 = 1,
+  kInt = 2,
+  kChar = 3,
+  kDouble = 4,
+  kUChar = 5,
+  kNumDataType = 6
+};
+
+enum CopyDirection : int {
+  kHostToHost = 0,
+  kHostToDevice = 1,
+  kDeviceToHost = 2,
+  kDeviceToDevice = 3,
+  kNumDirection = 4
+};
+
+inline string DataType_Name(DataType data_type) {
+	switch (data_type) {
+	case kFloat32:
+		return "Float32";
+	case kFloat16:
+		return "Float16";
+	case kInt:
+		return "Integer";
+	case kChar:
+		return "Char";
+	case kDouble:
+		return "Double";
+	case kUChar:
+		return "UnsignedChar";
+	case kNumDataType:
+		return "NumDataType";
+	}
+	return "N/A";
+}
+
+inline string LangType_Name(LangType lang_type) {
+	switch (lang_type) {
+	case kCpp:
+		return "cpp";
+	case kCuda:
+		return "cuda";
+	case kOpencl:
+		return "opencl";
+	case kNumDeviceType:
+		return "NumDeviceType";
+	}
+	return "N/A";
+}
+
+#endif
+
+extern float const_float_zero;
+extern float const_float_one;
+extern float const_float_minus_one;
+extern float const_float_two;
+extern float const_float_minus_two;
+extern float const_float_zero_five;
+extern float const_float_minus_zero_five;
+extern float const_float_one_five;
+extern float const_float_minus_one_five;
+extern float const_float_1e_6f;
+
+void init_const_float();
+
 namespace lang {
 /// To implement functions using cpp libraries
 typedef struct _Cpp {

@@ -38,7 +38,7 @@ const Tensor PReLU::Forward(int flag, const Tensor &input) {
   Tensor output;
   if (!channel_shared_) {
     size_t n, c, h, w;
-    Tensor temp = (input <= 0.f);
+    Tensor temp = (input <= const_float_zero);
     if (temp.nDim() == 4) {
       if (format_ == "NCHW") {
         n = temp.shape(0);
@@ -47,7 +47,7 @@ const Tensor PReLU::Forward(int flag, const Tensor &input) {
         w = temp.shape(3);
         temp.Reshape(Shape{n * c, h * w});
         Tensor temp_a(Shape{n, c}, input.device(), input.data_type());
-        Uniform(1.f, 1.f, &temp_a);
+        Uniform(const_float_one, const_float_one, &temp_a);
         MultRow(a_, &temp_a);
         temp_a.Reshape(Shape{n * c});
         MultColumn(temp_a, &temp);
@@ -65,13 +65,13 @@ const Tensor PReLU::Forward(int flag, const Tensor &input) {
       LOG(FATAL) << "Incorrect input format for prelu layer.";
     }
     temp.Reshape(input.shape());
-    output = input * ((input > 0.f) + temp);
+    output = input * ((input > const_float_zero) + temp);
   } else {
     // share the first param of Tensor A along all channels
     LOG(FATAL) << "Not implemented";
   // TODO(wangwei) cannot access the data in this way. The data could be on GPU.
     auto a = a_.data<float>()[0];
-    output = input * ((input > 0.f) + (input <= 0.f) * a);
+    output = input * ((input > const_float_zero) + (input <= const_float_zero) * a);
   }
   if (flag & kTrain) buf_.push(input);
   return output;
@@ -87,7 +87,7 @@ const std::pair<Tensor, vector<Tensor> > PReLU::Backward(int flag,
   da.ResetLike(a_);
   if (!channel_shared_) {
     size_t n = 0, c = 0, h = 0, w = 0;
-    Tensor temp1 = (input <= 0.f);
+    Tensor temp1 = (input <= const_float_zero);
     if (temp1.nDim() == 4) {
       if (format_ == "NCHW") {
         n = temp1.shape(0);
@@ -96,7 +96,7 @@ const std::pair<Tensor, vector<Tensor> > PReLU::Backward(int flag,
         w = temp1.shape(3);
         temp1.Reshape(Shape{n * c, h * w});
         Tensor temp_a(Shape{n, c}, grad.device(), grad.data_type());
-        Uniform(1.f, 1.f, &temp_a);
+        Uniform(const_float_one, const_float_one, &temp_a);
         MultRow(a_, &temp_a);
         temp_a.Reshape(Shape{n * c});
         MultColumn(temp_a, &temp1);
@@ -115,8 +115,8 @@ const std::pair<Tensor, vector<Tensor> > PReLU::Backward(int flag,
     } else {
       LOG(FATAL) << "Incorrect input format for prelu layer.";
     }
-    input_grad = grad * input * ((input > 0.f) + temp1);
-    Tensor temp2 = grad * input * (input <= 0.f);
+    input_grad = grad * input * ((input > const_float_zero) + temp1);
+    Tensor temp2 = grad * input * (input <= const_float_zero);
     if (format_ == "NCHW") {
       Tensor temp3(Shape{n * c}, grad.device(), grad.data_type());
       temp2.Reshape(Shape{n * c, h * w});
@@ -132,10 +132,10 @@ const std::pair<Tensor, vector<Tensor> > PReLU::Backward(int flag,
     LOG(FATAL) << "Not Implemented";
     // TODO(wangwei) cannot access the data in this way. The data could be on GPU.
     auto a = a_.data<float>()[0];
-    input_grad = grad * input * ((input > 0.f) + (input <= 0.f) * a);
-    Tensor temp = grad * input * (input <= 0.f);
+    input_grad = grad * input * ((input > const_float_zero) + (input <= const_float_zero) * a);
+    Tensor temp = grad * input * (input <= const_float_zero);
     float sum = Sum<float>(temp);
-    Uniform(1.f, 1.f, &da);
+    Uniform(const_float_one, const_float_one, &da);
     da *= sum;
   }
   param_grad.push_back(da);

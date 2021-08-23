@@ -22,6 +22,8 @@
 #ifndef SINGA_UTILS_TOKENIZER_H_
 #define SINGA_UTILS_TOKENIZER_H_
 
+#include <string>
+#include <cstring>
 #include <algorithm>
 #include <string>
 

@@ -25,7 +25,9 @@
 #include "singa/io/reader.h"
 #include "singa/io/writer.h"
 #include "singa/utils/logging.h"
+#ifndef LITE_POSIT
 #include "singa/proto/core.pb.h"
+#endif
 #include "singa/core/tensor.h"
 
 #include <string>

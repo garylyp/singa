@@ -19,7 +19,11 @@
 #ifndef SINGA_MODEL_LOSS_H_
 #define SINGA_MODEL_LOSS_H_
 #include <stack>
+#ifndef LITE_POSIT
 #include "singa/proto/model.pb.h"
+#else
+#include "singa/model/optimizer_conf.h"
+#endif
 #include "singa/core/tensor.h"
 namespace singa {
 

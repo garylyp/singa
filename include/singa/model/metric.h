@@ -19,7 +19,12 @@
 #ifndef SINGA_MODEL_METRIC_H_
 #define SINGA_MODEL_METRIC_H_
 #include "singa/core/tensor.h"
+#ifndef LITE_POSIT
 #include "singa/proto/model.pb.h"
+#else
+#include "singa/model/optimizer_conf.h"
+#endif
+#include <cstring>
 namespace singa {
 
 /// The base metric class, which declares the APIs for computing the performance
@@ -50,7 +55,7 @@ class Metric {
   /// Comptue the metric value averaged over all samples (in a batch)
   float Evaluate(const Tensor& prediction, const Tensor& target) {
     const Tensor metric = Forward(prediction, target);
-    return Sum<float>(metric) / (1.0f * metric.Size());
+    return Sum<float>(metric) / (const_float_one * metric.Size());
   }
 };
 /// Compute the accuray of the prediction, which is matched against the

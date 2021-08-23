@@ -28,13 +28,16 @@
 #include <type_traits>
 #include <unordered_set>
 #include <vector>
+#include <cstring>
 
 #include "singa/core/common.h"
 #include "singa/core/memory.h"
 #include "singa/core/scheduler.h"
+#ifndef LITE_POSIT
 #include "singa/proto/core.pb.h"
 #include "singa/singa_config.h"
 #include "singa/utils/safe_queue.h"
+#endif
 
 #ifdef USE_CUDA
 #include "singa/utils/cuda_utils.h"
@@ -71,7 +74,7 @@ class Device {
   static void EnableLazyAlloc(bool enbale) { lazy_alloc_ = enbale; }
 
   /// Called by Tensor.
-  Block* NewBlock(int size);
+  Block* NewBlock(size_t size);
 
   /// Called by Tensor.
   void FreeBlock(Block* block);
@@ -87,6 +90,10 @@ class Device {
 
   void CopyDataFromHostPtr(Block* dst, const void* src, size_t nBytes,
                            size_t dst_offset = 0, Context* ctx = nullptr);
+
+  void CopyDataToHostPtr(void* dst, Block* src, size_t nBytes,
+                                 size_t src_offset = 0);
+
   /// Submit the operation to the device, which may execute it right now or
   /// delay it depending on the scheduler.
   void Exec(function<void(Context*)>&& fn, const vector<Block*> read_blocks,

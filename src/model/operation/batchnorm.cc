@@ -307,23 +307,21 @@ const std::vector<Tensor> GpuBatchNormForwardTraining(
   output.ResetLike(x);
 
   output.device()->Exec(
-      [=, &bnScale, &bnBias, &running_mean, &running_var,
-       &cbnh](Context* ctx) mutable {
-        const float alpha = 1.0f, beta = 0.0f;
-        double epsilon = CUDNN_BN_MIN_EPSILON;
-        CUDNN_CHECK(cudnnBatchNormalizationForwardTraining(
-            ctx->cudnn_handle, cbnh.mode, &alpha, &beta, cbnh.shape_desc,
-            input.block()->data(), cbnh.shape_desc,
-            output.block()->mutable_data(), cbnh.param_desc,
-            bnScale.block()->data(), bnBias.block()->data(), cbnh.factor,
-            running_mean.block()->mutable_data(),
-            running_var.block()->mutable_data(), epsilon,
-            mean.block()->mutable_data(), var.block()->mutable_data()));
-      },
-      {input.block(), bnScale.block(), bnBias.block(), running_mean.block(),
-       running_var.block()},
-      {output.block(), running_mean.block(), running_var.block(), mean.block(),
-       var.block()}, "GpuBatchNormForwardTraining");
+  [&](Context * ctx) {
+    const float alpha = const_float_one, beta = const_float_zero;
+    double epsilon = CUDNN_BN_MIN_EPSILON;
+    CUDNN_CHECK(cudnnBatchNormalizationForwardTraining(
+                  ctx->cudnn_handle, cbnh.mode, &alpha, &beta, cbnh.shape_desc,
+                  input.block()->data(), cbnh.shape_desc, output.block()->mutable_data(),
+                  cbnh.param_desc, bnScale.block()->data(), bnBias.block()->data(), cbnh.factor,
+                  running_mean.block()->mutable_data(), running_var.block()->mutable_data(),
+                  epsilon, mean.block()->mutable_data(),
+                  var.block()->mutable_data()));
+  },
+  {input.block(), bnScale.block(), bnBias.block(), running_mean.block(), running_var.block()}, {
+    output.block(), running_mean.block(), running_var.block(),
+    mean.block(), var.block()
+  }, "GpuBatchNormForwardTraining");
   if (cbnh.is_2d) output.Reshape(Shape{shape.at(0), shape.at(1)});
   return {output, mean, var};
 }
@@ -347,21 +345,16 @@ Tensor GpuBatchNormForwardInference(const CudnnBatchNormHandle& cbnh,
   Tensor output;
   output.ResetLike(x);
   output.device()->Exec(
-      [=, &bnScale, &bnBias, &running_mean, &running_var,
-       &cbnh](Context* ctx) mutable {
-        const float alpha = 1.0f, beta = 0.0f;
-        double epsilon = CUDNN_BN_MIN_EPSILON;
-        CUDNN_CHECK(cudnnBatchNormalizationForwardInference(
-            ctx->cudnn_handle, cbnh.mode, &alpha, &beta, cbnh.shape_desc,
-            input.block()->data(), cbnh.shape_desc,
-            output.block()->mutable_data(), cbnh.param_desc,
-            bnScale.block()->data(), bnBias.block()->data(),
-            running_mean.block()->data(), running_var.block()->data(),
-            epsilon));
-      },
-      {input.block(), bnScale.block(), bnBias.block(), running_mean.block(),
-       running_var.block()},
-      {output.block()}, "GpuBatchNormForwardInference");
+  [&](Context * ctx) {
+    const float alpha = const_float_one, beta = const_float_zero;
+    double epsilon = CUDNN_BN_MIN_EPSILON;
+    CUDNN_CHECK(cudnnBatchNormalizationForwardInference(
+                  ctx->cudnn_handle, cbnh.mode, &alpha, &beta, cbnh.shape_desc,
+                  input.block()->data(), cbnh.shape_desc, output.block()->mutable_data(),
+                  cbnh.param_desc, bnScale.block()->data(), bnBias.block()->data(),
+                  running_mean.block()->data(), running_var.block()->data(), epsilon));
+  }, { input.block(), bnScale.block(), bnBias.block(), running_mean.block(), running_var.block() },
+  {output.block()}, "GpuBatchNormForwardInference");
   return output;
 }
 
@@ -384,19 +377,19 @@ const std::vector<Tensor> GpuBatchNormBackward(
   dbnBias.ResetLike(bnScale);
 
   dx.device()->Exec(
-      [=, &bnScale, &cbnh](Context* ctx) mutable {
-        const float alpha = 1.0f, beta = .0f;
-        double epsilon = CUDNN_BN_MIN_EPSILON;
-        CUDNN_CHECK(cudnnBatchNormalizationBackward(
-            ctx->cudnn_handle, cbnh.mode, &alpha, &beta, &alpha, &beta,
-            cbnh.shape_desc, x.block()->data(), cbnh.shape_desc,
-            dy.block()->data(), cbnh.shape_desc, dx.block()->mutable_data(),
-            cbnh.param_desc, bnScale.block()->data(),
-            dbnScale.block()->mutable_data(), dbnBias.block()->mutable_data(),
-            epsilon, mean.block()->data(), var.block()->data()));
-      },
-      {x.block(), dy.block(), bnScale.block(), mean.block(), var.block()},
-      {dx.block(), dbnScale.block(), dbnBias.block()}, "GpuBatchNormBackward");
+  [&](Context * ctx) {
+
+    const float alpha = const_float_one, beta = const_float_zero;
+    double epsilon = CUDNN_BN_MIN_EPSILON;
+    CUDNN_CHECK(cudnnBatchNormalizationBackward(
+                  ctx->cudnn_handle, cbnh.mode, &alpha, &beta, &alpha, &beta,
+                  cbnh.shape_desc, x.block()->data(), cbnh.shape_desc, dy.block()->data(),
+                  cbnh.shape_desc, dx.block()->mutable_data(), cbnh.param_desc,
+                  bnScale.block()->data(), dbnScale.block()->mutable_data(),
+                  dbnBias.block()->mutable_data(), epsilon, mean.block()->data(),
+                  var.block()->data()));
+  }, {x.block(), dy.block(), bnScale.block(), mean.block(), var.block()},
+  {dx.block(), dbnScale.block(), dbnBias.block()}, "GpuBatchNormBackward");
 
   if (cbnh.is_2d) dx.Reshape(Shape{dx.shape().at(0), dx.shape().at(1)});
 

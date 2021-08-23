@@ -1,0 +1,9 @@
+# Copyright 2019 SiFive, Inc #
+# SPDX-License-Identifier: Apache-2.0 #
+
+PROGRAM ?= singa-cifar10
+
+$(PROGRAM): $(wildcard *.cc) $(wildcard *.h) $(wildcard *.o)
+
+clean:
+	rm -f $(PROGRAM) $(PROGRAM).hex

@@ -45,7 +45,12 @@ void Optimizer::Register(const string& name, const ParamSpec& specs) {
     regularizers_[name] = new Regularizer(specs.regularizer());
   }
   if (specs.has_decay_mult()) {
+	/*
+	if (!specs.has_regularizer())
+		specs.mutable_regularizer();
     auto reg = specs.regularizer();
+    */
+	RegularizerConf reg;
     reg.set_coefficient(reg.coefficient() * conf_.regularizer().coefficient());
     regularizers_[name] = new Regularizer(reg);
   }

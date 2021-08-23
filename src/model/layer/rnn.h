@@ -88,7 +88,7 @@ class RNN : public Layer {
   size_t input_size_ = 0, hidden_size_ = 0, num_stacks_ = 0, seq_length_ = 0, max_length_ = 0;
   size_t batch_size_ = 0;
   size_t seed_ = 0x1234567;
-  float dropout_ = 0.0f;
+  float dropout_ = const_float_zero;
   string input_mode_, direction_, rnn_mode_;
   Tensor weight_;
 };

@@ -75,11 +75,11 @@ const std::pair<Tensor, vector<Tensor>> Activation::Backward(
   Tensor input_grad, inout = buf_.top();
   buf_.pop();
   if (mode_ == "sigmoid")
-    input_grad = grad * inout * (inout * (-1.f) + 1.f);
+    input_grad = grad * inout * (inout * (const_float_minus_one) + const_float_one);
   else if (mode_ == "tanh")
-    input_grad = grad * (inout * inout * (-1.f) + 1.f);
+    input_grad = grad * (inout * inout * (const_float_minus_one) + const_float_one);
   else if (mode_ == "relu")
-    input_grad = grad * (inout > 0.f) + (inout <= 0.f) * neg_slope_;
+    input_grad = grad * (inout > const_float_zero) + (inout <= const_float_zero) * neg_slope_;
   else LOG(FATAL) << "Unkown activation: " << mode_;
   return std::make_pair(input_grad, param_grad);
 }

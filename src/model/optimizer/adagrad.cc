@@ -35,7 +35,7 @@ void AdaGrad::Apply(int epoch, float lr, const string& name,
 
   if (history_gradient_.find(name) == history_gradient_.end()) {
     history_gradient_[name].ResetLike(value);
-    history_gradient_[name].SetValue(0.0f);
+    history_gradient_[name].SetValue(const_float_zero);
   }
   Tensor& history = history_gradient_[name];
   Tensor tmp = Square(grad);

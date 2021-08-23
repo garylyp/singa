@@ -23,7 +23,12 @@
 #include <cstdint>
 #include <iostream>
 #include "singa/core/tensor.h"
+
+// uncomment below if you want to write binary files for images and labels
+// #define WRITE_BIN_FILES
+
 using std::string;
+
 namespace singa {
 /// For reading cifar10 binary data as tensors.
 class Cifar10 {
@@ -64,6 +69,11 @@ const std::pair<Tensor, Tensor> Cifar10::ReadFile(string file) {
   std::ifstream data_file((dir_path_ + file).c_str(),
                           std::ios::in | std::ios::binary);
   CHECK(data_file.is_open()) << "Unable to open file " << dir_path_ + file;
+#ifdef WRITE_BIN_FILES
+  std::ofstream image_bin("images.bin", std::ios::out | std::ios::binary);
+  std::ofstream image_int_bin("images-int.bin", std::ios::out | std::ios::binary);
+  std::ofstream label_bin("labels.bin", std::ios::out | std::ios::binary);
+#endif
   int label;
   char image[kImageVol];
   float float_image[kImageVol];
@@ -74,9 +84,16 @@ const std::pair<Tensor, Tensor> Cifar10::ReadFile(string file) {
     for (size_t i = 0; i < kImageVol; i++)
       float_image[i] = static_cast<float>(static_cast<uint8_t>(image[i]));
     images.CopyDataFromHostPtr(float_image, kImageVol, itemid * kImageVol);
+#ifdef WRITE_BIN_FILES
+    image_bin.write((char*)float_image, kImageVol * sizeof(float));
+    image_int_bin.write((char*)image, kImageVol * sizeof(char));
+#endif
     tmplabels[itemid] = label;
   }
   labels.CopyDataFromHostPtr(tmplabels, kBatchSize);
+#ifdef WRITE_BIN_FILES
+  label_bin.write((char*)tmplabels, kBatchSize * sizeof(int));
+#endif
   return std::make_pair(images, labels);
 }
 

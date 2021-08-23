@@ -22,7 +22,9 @@
 #define SINGA_MODEL_LAYER_BATCHNORM_H
 #include "singa/model/layer.h"
 #include "singa/core/common.h"
+#ifndef LITE_POSIT
 #include "singa/proto/core.pb.h"
+#endif
 #include <stack>
 
 namespace singa {

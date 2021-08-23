@@ -1,0 +1,9 @@
+SINGA VERSION: 1200
+parameter name: conv1_weight	data type: 0	dim: 2	shape: 32 75
+parameter name: conv1_bias	data type: 0	dim: 1	shape: 32
+parameter name: conv2_weight	data type: 0	dim: 2	shape: 32 800
+parameter name: conv2_bias	data type: 0	dim: 1	shape: 32
+parameter name: conv3_weight	data type: 0	dim: 2	shape: 64 800
+parameter name: conv3_bias	data type: 0	dim: 1	shape: 64
+parameter name: ip_weight	data type: 0	dim: 2	shape: 1024 10
+parameter name: ip_bias	data type: 0	dim: 1	shape: 10

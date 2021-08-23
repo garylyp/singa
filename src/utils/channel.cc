@@ -80,11 +80,13 @@ void Channel::Send(const std::string& message) {
   // TODO(wangwei) flush
 }
 
+#ifndef LITE_POSIT
 void Channel::Send(const google::protobuf::Message& message) {
   if (stderr_) fprintf(stderr, "%s\n", message.DebugString().c_str());
   if (file_ && os_.is_open()) message.SerializeToOstream(&os_);
   // TODO(wangwei) flush
 }
+#endif
 
 void InitChannel(const char* argv) {
   ChannelManager* mng = Singleton<ChannelManager>().Instance();

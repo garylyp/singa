@@ -26,8 +26,10 @@
 
 #include <memory>
 #include <vector>
+#ifndef LITE_POSIT
 #include <mutex>
 #include <condition_variable>
+#endif
 #include <string>
 #include <utility>
 #include <unordered_map>
@@ -88,9 +90,11 @@ class LocalUpdater : public Updater {
   std::unordered_map<std::pair<int, std::string>, Tensor,
     key_hasher<int, std::string>> grad_buffer_;
   std::unordered_map<std::string, Tensor> sum_, param_buffer_;
+#ifndef LITE_POSIT
   std::unordered_map<std::string, std::mutex> mtx_;
   std::unordered_map<std::string, std::condition_variable>
     to_updater_all_finished_;
+#endif
 };
 }  //  namespace singa
 

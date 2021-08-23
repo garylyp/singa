@@ -25,7 +25,11 @@
 #include <utility>
 #include <memory>
 #include "singa/core/tensor.h"
+#ifndef LITE_POSIT
 #include "singa/proto/model.pb.h"
+#else
+#include "singa/model/optimizer_conf.h"
+#endif
 #include "singa/utils/factory.h"
 
 namespace singa {
@@ -194,9 +198,27 @@ class Layer {
     return param_specs_.at(i);
   }
 
+  bool ends_with(std::string const &fullString, std::string const &ending) {
+      if (fullString.length() >= ending.length()) {
+          return (0 == fullString.compare (fullString.length() - ending.length(), ending.length(), ending));
+      } else {
+          return false;
+      }
+  }
+
   /// Return pointers to parameter Tensor s.
   virtual const vector<Tensor> param_values() {
     return vector<Tensor>{};
+  }
+
+  virtual const int set_param_values(vector<Tensor>) {
+	  LOG(ERROR) << "Not implemented!";
+      return 0;
+  }
+
+  virtual const int set_param(string name, Tensor tensor) {
+  	  LOG(ERROR) << "Not implemented!";
+      return 0;
   }
 
   /// Return names of all parmaeters.
@@ -209,7 +231,13 @@ class Layer {
   /// Return the 'i'-th parameter name.
   const string& param_name(size_t i) {
     CHECK_LT(i, param_specs_.size());
+#ifdef LITE_POSIT
+    std::string* str = new std::string(param_specs_.at(i).name());
+    CHECK_NOTNULL(str);
+    return *str;
+#else
     return param_specs_.at(i).name();
+#endif
   }
 
   /// Each layer instance would optionally have a name.

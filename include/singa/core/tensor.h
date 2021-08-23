@@ -25,7 +25,9 @@
 #include "half.hpp"
 #include "singa/core/common.h"
 #include "singa/core/device.h"
+#ifndef LITE_POSIT
 #include "singa/proto/core.pb.h"
+#endif
 #include "singa/utils/logging.h"
 
 using std::tuple;
@@ -156,7 +158,11 @@ class Tensor {
   void get_value(SType *value, const size_t num) const;
 
   /// Serialize data, shape and transpose to protobuf object.
+#ifndef LITE_POSIT
   void ToProto(singa::TensorProto *proto) const;
+#endif
+  void ToBytes(uint8_t** buffer, size_t max_size, size_t *actual_size) const;
+  void FromBytes(uint8_t* buffer, size_t max_size);
 
   void to_proto(singa::TensorProto *proto) const;
 
@@ -188,7 +194,9 @@ class Tensor {
   void CopyData(const Tensor &other);
 
   /// Deserialize data, shape and transpose from protobuf object.
+#ifndef LITE_POSIT
   void FromProto(const singa::TensorProto &proto);
+#endif
 
   /// TODO(wangwei) merge RepeatData into  Repeat?
   void RepeatData(const vector<size_t> &repeats, int axis, int total_repeats,

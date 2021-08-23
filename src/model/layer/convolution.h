@@ -21,6 +21,7 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include <cstring>
 #include "singa/model/layer.h"
 
 namespace singa {
@@ -51,6 +52,20 @@ class Convolution : public Layer {
       return std::vector<Tensor>{weight_, bias_};
     else
       return std::vector<Tensor>{weight_};
+  }
+
+  const int set_param(string name, Tensor tensor) {
+	  if (bias_term_ && ends_with(name, "bias")) {
+		  bias_.ResetLike(tensor);
+		  bias_.CopyData(tensor);
+		  return 0;
+	  }
+	  if (ends_with(name, "weight")) {
+		  weight_.ResetLike(tensor);
+		  weight_.CopyData(tensor);
+		  return 0;
+	  }
+	  return -1;
   }
 
   size_t kernel_w() const { return kernel_w_; }

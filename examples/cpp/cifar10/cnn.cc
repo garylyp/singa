@@ -25,6 +25,14 @@
 #include "singa/model/metric.h"
 #include "singa/utils/channel.h"
 #include "singa/utils/string.h"
+#include "singa/io/snapshot.h"
+#ifdef MY_FILE_READER
+#include "file_reader.h"
+#endif
+#ifdef MY_MEM_READER
+#include "mem_reader.h"
+#include "objects.h"
+#endif
 namespace singa {
 // currently supports 'cudnn' and 'singacpp'
 #ifdef USE_CUDNN
@@ -137,6 +145,36 @@ FeedForwardNet CreateNet() {
   return net;
 }
 
+#ifdef MY_MEM_READER
+vector<std::pair<std::string, Tensor>> LoadParams() {
+	std::unordered_set<std::string> param_names_;
+	std::unordered_map<std::string, Tensor> param_map_;
+	std::string key;
+	char* ptr;
+	size_t size; 
+
+	LOG(INFO) << "Load snapshot from memory.";
+
+	int param_size = &_binary_myfilesnap_bin_end - &_binary_myfilesnap_bin_start;
+	LOG(INFO) << "Size of parameters: " << param_size;
+
+	MemReader mem_reader((char*)&_binary_myfilesnap_bin_start, param_size);
+
+	return mem_reader.Read();
+
+	while (mem_reader.Read(&key, &ptr, &size)) {
+		CHECK(param_names_.count(key) == 0);
+		LOG(INFO) << "Read param: " << key;
+		param_names_.insert(key);		
+		param_map_[key].FromBytes((uint8_t *)ptr, size);
+	}
+	std::vector<std::pair<std::string, Tensor>> ret;
+	for (auto it = param_map_.begin(); it != param_map_.end(); ++it)
+		ret.push_back(*it);
+	return ret;
+}
+#endif
+
 void Train(int num_epoch, string data_dir) {
   Cifar10 data(data_dir);
   Tensor train_x, train_y, test_x, test_y;
@@ -189,6 +227,93 @@ void Train(int num_epoch, string data_dir) {
   test_y.ToDevice(dev);
 #endif  // USE_CUDNN
   net.Train(100, num_epoch, train_x, train_y, test_x, test_y);
+  test_y = net.Forward(kEval, test_x);
+
+#ifdef MY_FILE_READER
+  FileReader snap;
+  snap.OpenForWrite("myfilesnap.bin");
+#else
+  Snapshot snap("mysnap", Snapshot::kWrite, 100);
+#endif
+  vector<string> names = net.GetParamNames();
+  vector<Tensor> params = net.GetParamValues();
+  vector<string>::iterator namesIter;
+  vector<Tensor>::iterator paramsIter;
+  int idx = 0;
+  for (paramsIter = params.begin(), namesIter = names.begin();
+		  paramsIter != params.end() && namesIter != names.end();
+		  paramsIter++, namesIter++) {
+	  LOG(INFO) << "Write param: " << *namesIter;
+	  snap.Write(*namesIter, *paramsIter);
+	  idx++;
+  }
+#ifdef MY_FILE_READER
+  snap.Close();
+#endif
+}
+
+void Eval(string data_dir) {
+  Cifar10 data(data_dir);
+  Tensor test_x, test_y;
+  {
+    auto test = data.ReadTestData();
+    size_t nsamples = test.first.shape(0);
+    auto mtest =
+        Reshape(test.first, Shape{nsamples, test.first.Size() / nsamples});
+    const Tensor& mean = Average(mtest, 0);
+    SubRow(mean, &mtest);
+    test_x = Reshape(mtest, test.first.shape());
+    test_y = test.second;
+  }
+  CHECK_EQ(test_x.shape(0), test_y.shape(0));
+  LOG(INFO) << "Test samples = " << test_y.shape(0);
+  auto net = CreateNet();
+  SGD sgd;
+  OptimizerConf opt_conf;
+  opt_conf.set_momentum(0.9);
+  auto reg = opt_conf.mutable_regularizer();
+  reg->set_coefficient(0.004);
+  sgd.Setup(opt_conf);
+  sgd.SetLearningRateGenerator([](int step) {
+    if (step <= 120)
+      return 0.001;
+    else if (step <= 130)
+      return 0.0001;
+    else
+      return 0.00001;
+  });
+
+  SoftmaxCrossEntropy loss;
+  Accuracy acc;
+  net.Compile(true, &sgd, &loss, &acc);
+
+#ifdef MY_FILE_READER
+  FileReader snap;
+  snap.OpenForRead("myfilesnap.bin");
+  vector<std::pair<std::string, Tensor>> params = snap.Read();
+#elif (defined MY_MEM_READER)
+  vector<std::pair<std::string, Tensor>> params = LoadParams();
+#else
+  Snapshot snap("mysnap", Snapshot::kRead, 100);
+  vector<std::pair<std::string, Tensor>> params = snap.Read();
+#endif
+
+  net.SetParamValues(params);
+
+#ifdef USE_CUDNN
+  auto dev = std::make_shared<CudaGPU>();
+  net.ToDevice(dev);
+  test_x.ToDevice(dev);
+  test_y.ToDevice(dev);
+#endif  // USE_CUDNN
+
+  float val = 0.f;
+  LOG(INFO) << "Start evaluation";
+  std::pair<Tensor, Tensor> ret = net.EvaluateOnBatchAccuracy(test_x, test_y, &val);
+  LOG(INFO) << "Accuracy: " << val;
+#ifdef MY_FILE_READER
+  snap.Close();
+#endif
 }
 }
 
@@ -204,4 +329,8 @@ int main(int argc, char **argv) {
   LOG(INFO) << "Start training";
   singa::Train(nEpoch, data);
   LOG(INFO) << "End training";
+
+  LOG(INFO) << "Start evaluation";
+  singa::Eval(data);
+  LOG(INFO) << "End evaluation";
 }

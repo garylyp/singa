@@ -17,5 +17,11 @@
 # limitations under the License.
 # 
 
-../../build/bin/createdata -trainlist "imagenet/label/train.txt" -trainfolder "imagenet/ILSVRC2012_img_train" \
+if ! [ -e "createdata" ]; then
+	g++ -O3 -I../../../include -I../../../build/include ilsvrc12.cc -o createdata -L../../../build/lib -lsinga -lprotobuf -lpthread -lopencv_core -lopencv_imgcodecs -lopencv_imgproc
+fi
+
+export LD_LIBRARY_PATH=../../../build/lib
+
+./createdata -trainlist "imagenet/label/train.txt" -trainfolder "imagenet/ILSVRC2012_img_train" \
   -testlist "imagenet/label/val.txt" -testfolder "imagenet/ILSVRC2012_img_val" -outdata "imagenet_data" -filesize 1280

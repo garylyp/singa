@@ -74,17 +74,17 @@ const Tensor BatchNorm::Forward(int flag, const Tensor& input) {
   if ((flag & kTrain) == kTrain) {  // forward for train
     if (is_2d_) {                   // batchnorm_per_activation mode
       auto mean = Average(x, 0);
-      runningMean_ *= 1.0f - factor_;
+      runningMean_ *= const_float_one - factor_;
       Axpy(factor_, mean, &runningMean_);
       auto xnorm = x.Clone();
       SubRow(mean, &xnorm);
       xnorm = Square(xnorm);
       auto var = Average(xnorm, 0);
-      runningVariance_ *= 1.0f - factor_;
+      runningVariance_ *= const_float_one - factor_;
       Axpy(factor_, var, &runningVariance_);
       Tensor tmp = var.Clone();
       tmp = Sqrt(tmp);
-      tmp += 1e-6f;
+      tmp += const_float_1e_6f;
       xnorm = x.Clone();
       SubRow(mean, &xnorm);
       DivRow(tmp, &xnorm);
@@ -105,7 +105,7 @@ const Tensor BatchNorm::Forward(int flag, const Tensor& input) {
       SubRow(runningMean_, &xnorm);
       Tensor tmp = runningVariance_.Clone();
       tmp = Sqrt(tmp);
-      tmp += 1e-6f;
+      tmp += const_float_1e_6f;
       DivRow(tmp, &xnorm);
       output = xnorm.Clone();
       MultRow(bnScale_, &output);
@@ -178,9 +178,9 @@ const std::pair<Tensor, vector<Tensor>> BatchNorm::Backward(
       MultRow(bnScale_, &gxnorm);
       // gvar
       Tensor tmp = var.Clone();
-      tmp += 1e-6f;
-      tmp = Pow(var, -1.5f);
-      tmp *= -0.5f;
+      tmp += const_float_1e_6f;
+      tmp = Pow(var, const_float_minus_one_five);
+      tmp *= const_float_minus_zero_five;
 
       Tensor tmpx = input.Clone();
       SubRow(mean, &tmpx);
@@ -192,9 +192,9 @@ const std::pair<Tensor, vector<Tensor>> BatchNorm::Backward(
       SumRows(tmpx, &gvar);
       // gmean
       tmp = var.Clone();
-      tmp += 1e-6f;
-      tmp = Pow(tmp, -0.5f);
-      tmp *= -1.0f;
+      tmp += const_float_1e_6f;
+      tmp = Pow(tmp, const_float_minus_zero_five);
+      tmp *= const_float_minus_one;
       Tensor tmpx_r;
       tmpx_r.ResetLike(tmp);
       SumRows(gxnorm, &tmpx_r);
@@ -203,24 +203,24 @@ const std::pair<Tensor, vector<Tensor>> BatchNorm::Backward(
       tmpx = input.Clone();
       SubRow(mean, &tmpx);
       SumRows(tmpx, &tmp);
-      tmp *= -2.0f / input.shape(0);
+      tmp *= const_float_minus_two / input.shape(0);
       tmp = tmp * gvar;
       gmean = gmean + tmp;
       // dx
       tmp = var.Clone();
-      tmp += 1e-6f;
-      tmp = Pow(tmp, -0.5f);
+      tmp += const_float_1e_6f;
+      tmp = Pow(tmp, const_float_minus_zero_five);
       dx = gxnorm.Clone();
       MultRow(tmp, &dx);
 
       tmpx = input.Clone();
       SubRow(mean, &tmpx);
-      tmpx *= 2.0f / input.shape(0);
+      tmpx *= const_float_two / input.shape(0);
       MultRow(gvar, &tmpx);
       dx = dx + tmpx;
 
       tmp = gmean.Clone();
-      tmp *= 1.0f / input.shape(0);
+      tmp *= const_float_one / input.shape(0);
 
       AddRow(tmp, &dx);
       // dbnScale

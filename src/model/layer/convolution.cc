@@ -148,7 +148,7 @@ const std::pair<Tensor, vector<Tensor>> Convolution::Backward(
   Tensor db, dw;
   dx.ResetLike(src_data);
   dw.ResetLike(weight_);
-  dw.SetValue(0.0f);
+  dw.SetValue(const_float_zero);
   size_t batchsize = grad.shape(0);
   size_t imagesize = src_data.Size() / batchsize;
   if (bias_term_) {

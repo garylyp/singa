@@ -22,7 +22,9 @@
 #include <atomic>
 #include <mutex>
 
+#ifndef LITE_POSIT
 #include "singa/proto/core.pb.h"
+#endif
 #include "singa/singa_config.h"
 
 #ifdef USE_CUDA

@@ -124,5 +124,15 @@ void Device::CopyDataFromHostPtr(Block* dst, const void* src, size_t nBytes,
         direct](Context* ctx) { CopyToFrom(dstptr, src, nBytes, direct, ctx); },
        {}, {dst}, "CopyDataFromHostPtr");
 }
+
+void Device::CopyDataToHostPtr(void* dst, Block* src, size_t nBytes,
+                                 size_t src_offset) {
+  auto direct = lang_ == kCpp ? kHostToHost : kDeviceToHost;
+  void* srcptr = reinterpret_cast<char*>(src->mutable_data()) + src_offset;
+  Exec([this, dst, srcptr, nBytes,
+        direct](Context* ctx) { CopyToFrom(dst, srcptr, nBytes, direct, ctx); },
+       {src}, {});
+}
+
 void Device::Sync() {}
 }  // namespace singa

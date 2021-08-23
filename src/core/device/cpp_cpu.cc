@@ -70,6 +70,12 @@ void CppCPU::Free(void* ptr) {
 void CppCPU::CopyToFrom(void* dst, const void* src, size_t nBytes,
                         CopyDirection direction, Context* ctx) {
   memcpy(dst, src, nBytes);
+  /*
+  char* dstc = (char*) dst;
+  char* srcc = (char*) src;
+  for (int i = 0; i < nBytes; i++)
+    dstc[i] = srcc[i];
+  */
 }
 
 }  // namespace singa

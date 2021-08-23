@@ -35,8 +35,8 @@ const Tensor Dropout::Forward(int flag, const Tensor& input) {
   if (flag & kTrain) {
     mask_.ResetLike(input);
     // set mask_[i] = 1 with prob 1-dropout_rato_
-    Bernoulli(1.0f - dropout_ratio_, &mask_);
-    mask_ *= 1.0f / (1.0f - dropout_ratio_);
+    Bernoulli(const_float_one - dropout_ratio_, &mask_);
+    mask_ *= const_float_one / (const_float_one - dropout_ratio_);
     out = input * mask_;
   } else {
     out = input;

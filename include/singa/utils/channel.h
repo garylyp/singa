@@ -22,7 +22,9 @@
 #ifndef SINGA_UTILS_CHANNEL_H_
 #define SINGA_UTILS_CHANNEL_H_
 
+#ifndef LITE_POSIT
 #include <google/protobuf/message.h>
+#endif
 
 #include <fstream>
 #include <iostream>
@@ -49,7 +51,9 @@ class Channel {
   /// Append a string message
   void Send(const std::string& message);
   /// Append a protobuf message
+#ifndef LITE_POSIT
   void Send(const google::protobuf::Message& message);
+#endif
 
  private:
   std::string name_ = "";

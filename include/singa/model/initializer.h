@@ -20,7 +20,11 @@
 #define SINGA_MODEL_INITIALIZER_H_
 #include <string>
 #include "singa/core/tensor.h"
+#ifndef LITE_POSIT
 #include "singa/proto/model.pb.h"
+#else
+#include "singa/model/optimizer_conf.h"
+#endif
 #include "singa/utils/string.h"
 namespace singa {
 /// Base class for initializing parameter values.

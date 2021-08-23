@@ -22,6 +22,9 @@
 #include <vector>
 #include <stack>
 #include "singa/model/layer.h"
+#ifdef LITE_POSIT
+#include "singa/model/optimizer_conf.h"
+#endif
 
 namespace singa {
 class Dense : public Layer {
@@ -64,6 +67,20 @@ class Dense : public Layer {
   void set_bias(const Tensor& b) {
     bias_.ResetLike(b);
     bias_.CopyData(b);
+  }
+
+  const int set_param(string name, Tensor tensor) {
+	  if (bias_term_ && ends_with(name, "bias")) {
+		  bias_.ResetLike(tensor);
+		  bias_.CopyData(tensor);
+		  return 0;
+	  }
+	  if (ends_with(name, "weight")) {
+		  weight_.ResetLike(tensor);
+		  weight_.CopyData(tensor);
+		  return 0;
+	  }
+	  return -1;
   }
 
  protected:

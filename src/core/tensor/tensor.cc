@@ -21,8 +21,15 @@
 
 #include "./tensor_math.h"
 #include "./tensor_math_cpp.h"
+#ifdef USE_CUDA
 #include "./tensor_math_cuda.h"
+#endif
+#ifdef USE_OPENCL
 #include "./tensor_math_opencl.h"
+#endif
+#include <utility>
+#include <algorithm>
+
 
 #define Noaxis 9999
 
@@ -304,6 +311,7 @@ void Tensor::RepeatData(const vector<size_t> &repeats, int axis,
   }
 }
 
+#ifndef LITE_POSIT
 void Tensor::FromProto(const singa::TensorProto &proto) {
   if (block_ != nullptr && block_->DecRefCount() == 0)
     device_->FreeBlock(block_);
@@ -373,47 +381,160 @@ void Tensor::to_proto(singa::TensorProto *proto) const {
     proto->add_stride(s);
   }
   switch (data_type_) {
-    case kFloat32: {
-      proto->clear_float_data();
-      const float *data_ptr = data<float>();
-      for (size_t i = 0; i < Product(shape_); ++i)
-        proto->add_float_data(data_ptr[i]);
-      break;
-    }
-    case kDouble: {
-      proto->clear_double_data();
-      const double *data_ptr = data<double>();
-      for (size_t i = 0; i < Product(shape_); ++i)
-        proto->add_double_data(data_ptr[i]);
-      break;
-    }
-    case kInt: {
-      proto->clear_int_data();
-      const int *data_ptr = data<int>();
-      for (size_t i = 0; i < Product(shape_); ++i)
-        proto->add_int_data(data_ptr[i]);
-      break;
-    }
-    /*
-    case kChar: {
-      proto->clear_bytes_data();
-      const char *data = data<char>();
-      for (size_t i = 0; i < Product(shape_); ++i)
-        proto->add_bytes_data(static_cast<unsigned char>(data[i]));
-      break;
-    }
-    case kUChar: {
-      proto->clear_bytes_data();
-      const unsigned char *data = data<unsigned char>();
-      for (size_t i = 0; i < Product(shape_); ++i)
-        proto->add_bytes_data(static_cast<unsigned char>(data[i]));
-      break;
-    }
-    */
-    default: {
-      LOG(FATAL) << "Unsupported Type" << DataType_Name(data_type_);
-    }
+  case kFloat32: {
+    proto->clear_float_data();
+    // const float *data_ptr = device_->block()->data<float>();
+    float* data_ptr = new float[Product(shape_)];
+    device_->CopyDataToHostPtr((void*)data_ptr, block(), Product(shape_) * sizeof(float));
+    for (size_t i = 0; i < Product(shape_); ++i)	    
+      proto->add_float_data(data_ptr[i]);
+    delete data_ptr;
+    break;
   }
+  case kDouble: {
+    proto->clear_double_data();
+    const double *data_ptr = data<double>();
+    for (size_t i = 0; i < Product(shape_); ++i)
+      proto->add_double_data(data_ptr[i]);
+    break;
+  }
+  case kInt: {
+    proto->clear_int_data();
+    const int *data_ptr = data<int>();
+    for (size_t i = 0; i < Product(shape_); ++i)
+      proto->add_int_data(data_ptr[i]);
+    break;
+  }
+  /*
+  case kChar: {
+    proto->clear_bytes_data();
+    const char *data = data<char>();
+    for (size_t i = 0; i < Product(shape_); ++i)
+      proto->add_bytes_data(static_cast<unsigned char>(data[i]));
+    break;
+  }
+  case kUChar: {
+    proto->clear_bytes_data();
+    const unsigned char *data = data<unsigned char>();
+    for (size_t i = 0; i < Product(shape_); ++i)
+      proto->add_bytes_data(static_cast<unsigned char>(data[i]));
+    break;
+  }
+  */
+  default: { LOG(FATAL) << "Unsupported Type" << DataType_Name(data_type_); }
+  }
+}
+#endif // LITE_POSIT
+
+void Tensor::ToBytes(uint8_t** buffer, size_t max_size, size_t *actual_size) const {
+	CHECK_NOTNULL(buffer);
+	if (*buffer == nullptr) {
+		*buffer = new uint8_t[Product(shape_) * sizeof(float) + 1024];
+	}
+	CHECK_NOTNULL(buffer);
+
+	uint8_t* ptr = *buffer;
+	size_t len;
+
+	// Shape - vector<size_t>
+	len = shape_.size();
+	memcpy(ptr, &len, sizeof(size_t));
+	ptr += sizeof(size_t);
+	for (auto s : shape_) {
+		memcpy(ptr, &s, sizeof(size_t));
+		ptr += sizeof(size_t);
+	}
+	// data_type_
+	memcpy(ptr, &data_type_, sizeof(int));
+	ptr += sizeof(int);
+	// stride_
+	len = stride_.size();
+	memcpy(ptr, &len, sizeof(size_t));
+	ptr += sizeof(size_t);
+	for (auto s : stride_) {
+		memcpy(ptr, &s, sizeof(int));
+		ptr += sizeof(int);
+	}
+	// actual data
+	switch (data_type_) {
+	case kFloat32: {
+		len = Product(shape_) * sizeof(float);
+		memcpy(ptr, &len, sizeof(size_t));
+		ptr += sizeof(size_t);
+		device_->CopyDataToHostPtr((void*)ptr, block(), len);
+		ptr += len;
+		break;
+	}
+	case kDouble: {
+		LOG(FATAL) << "ToBytes of kDouble not implemented!";
+		break;
+	}
+	case kInt: {
+		LOG(FATAL) << "ToBytes of kInt not implemented!";
+		break;
+	}
+	default: { LOG(FATAL) << "ToBytes of " << DataType_Name(data_type_) << " not implemented!"; }
+	}
+
+	*actual_size = ptr - (*buffer);
+}
+
+void Tensor::FromBytes(uint8_t *buffer, size_t max_size) {
+	uint8_t* ptr = buffer;
+	size_t len;
+
+	if (block_ != nullptr && block_->DecRefCount() == 0)
+		device_->FreeBlock(block_);
+	block_ = nullptr;
+
+	// Shape - vector<size_t>
+	shape_.clear();
+	memcpy(&len, ptr, sizeof(size_t));
+	ptr += sizeof(size_t);
+	for (size_t i = 0; i < len; i++) {
+		size_t val;
+		memcpy(&val, ptr, sizeof(size_t));
+		ptr += sizeof(size_t);
+		shape_.push_back(val);
+	}
+
+	// data_type_
+	memcpy(&data_type_, ptr, sizeof(int));
+	ptr += sizeof(int);
+
+	// stride - vector<int>
+	stride_.clear();
+	memcpy(&len, ptr, sizeof(size_t));
+	ptr += sizeof(size_t);
+	for (size_t i = 0; i < len; i++) {
+		int val;
+		memcpy(&val, ptr, sizeof(int));
+		ptr += sizeof(int);
+		stride_.push_back(val);
+	}
+
+	block_ = device_->NewBlock((int)(Product(shape()) * SizeOf(data_type_)));
+
+	// actual data
+	switch (data_type_) {
+	case kFloat32: {
+		memcpy(&len, ptr, sizeof(size_t));
+		ptr += sizeof(size_t);
+		// device_->CopyDataFromHostPtr(block(), ptr, len);
+		CopyDataFromHostPtr<float>((float*)ptr, Product(shape_));
+		ptr += len;
+		break;
+	}
+	case kDouble: {
+		LOG(FATAL) << "FromBytes of kDouble not implemented!";
+		break;
+	}
+	case kInt: {
+		LOG(FATAL) << "FromBytes of kInt not implemented!";
+		break;
+	}
+	default: { LOG(FATAL) << "FromBytes of " << DataType_Name(data_type_) << " not implemented!"; }
+	}
 }
 
 void Tensor::ToProto(singa::TensorProto *proto) const { to_proto(proto); }
@@ -813,7 +934,7 @@ void RepeatDataToFrom(bool broadcast_flag, const vector<size_t> &repeats,
 
 // =============Element-wise operations====================================
 float Tensor::l1() const {
-  float nrm = 0.0f;
+  float nrm = const_float_zero;
   TYPE_LANG_SWITCH(data_type_, DType, device_->lang(), Lang, {
     device_->Exec(
         [&nrm, this](Context *ctx) {
@@ -831,7 +952,7 @@ float Tensor::L1() const { return l1(); }
 
 /// L2 norm, Do not use Nrm2 (name conflict).
 float Tensor::l2() const {
-  float nrm = 0.0f;
+  float nrm = const_float_zero;
   TYPE_LANG_SWITCH(data_type_, DType, device_->lang(), Lang, {
     device_->Exec(
         [&nrm, this](Context *ctx) {
@@ -1200,9 +1321,9 @@ Tensor Average(const Tensor &M, int axis) {
   //    ....
   // }
   if (axis == 0) {
-    return Sum(M, 0) / (1.0f * M.shape(0));
+    return Sum(M, 0) / (const_float_one * M.shape(0));
   } else if (axis == 1) {
-    return Sum(M, 1) / (1.0f * M.shape(1));
+    return Sum(M, 1) / (const_float_one * M.shape(1));
   } else {
     LOG(FATAL) << "Not currently support Sum over axis = " << axis;
   }
@@ -1210,9 +1331,9 @@ Tensor Average(const Tensor &M, int axis) {
 // TODO(wangwei) conside async exec
 template <>
 float Sum<float>(const Tensor &in) {
-  float s = 0.0f;
+  float s = const_float_zero;
   Tensor one(in.shape(), in.device(), in.data_type());
-  one.SetValue(1.0f);
+  one.SetValue(const_float_one);
   TYPE_LANG_SWITCH(in.data_type(), DType, in.device()->lang(), Lang, {
     one.device()->Exec(
         // cannot use this sum function in computational graph
@@ -1283,8 +1404,8 @@ void AddColumn(const SType alpha, const SType beta, const Tensor &v,
     CHECK_EQ(nb_row, v.Size());
 
     Tensor one(Shape{1, nb_col}, M->device(), M->data_type());
-    one.SetValue(1.0f);  // TODO(wangwei) cast type
-    Tensor vmat(Reshape(v, Shape{nb_row, 1}));
+    one.SetValue(const_float_one);  // TODO(wangwei) cast type
+    Tensor vmat = Reshape(v, Shape{nb_row, 1});
     Mult(alpha, vmat, one, beta, M);
   }
 }
@@ -1306,8 +1427,8 @@ void AddRow(const SType alpha, const SType beta, const Tensor &v, Tensor *M) {
     CHECK_EQ(nb_col, v.Size());
 
     Tensor one(Shape{nb_row, 1}, M->device(), M->data_type());
-    one.SetValue(1.0f);
-    Tensor vmat(Reshape(v, Shape{1, nb_col}));
+    one.SetValue(const_float_one);
+    Tensor vmat = Reshape(v, Shape{1, nb_col});
     Mult(alpha, one, vmat, beta, M);
   }
 }
@@ -1516,7 +1637,7 @@ void SumColumns(const Tensor &M, Tensor *v) {
     CHECK_EQ(nb_row, v->Size());
 
     Tensor one(Shape{nb_col}, M.device(), M.data_type());
-    one.SetValue(1.0f);  // TODO(wangwei) cast type
+    one.SetValue(const_float_one);  // TODO(wangwei) cast type
     Mult(M, one, v);
   }
 }
@@ -1531,7 +1652,7 @@ void SumRows(const Tensor &M, Tensor *v) {
     CHECK_EQ(nb_col, v->Size());
 
     Tensor one(Shape{nb_row}, M.device(), M.data_type());
-    one.SetValue(1.0f);  // TODO(wangwei) cast type
+    one.SetValue(const_float_one);  // TODO(wangwei) cast type
     Tensor X = Transpose(M);
     Mult(X, one, v);
   }
@@ -1627,7 +1748,7 @@ Tensor Mult(const Tensor &A, const Tensor &B) {
 }
 
 void Mult(const Tensor &A, const Tensor &B, Tensor *out) {
-  Mult(1.0f, A, B, 0.0f, out);
+  Mult(const_float_one, A, B, const_float_zero, out);
 }
 
 template <typename SType>

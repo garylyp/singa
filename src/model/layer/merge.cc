@@ -38,7 +38,7 @@ const vector<Tensor> Merge::Forward(int flag, const vector<Tensor>& inputs) {
   } else {
     Tensor sum;
     sum.ResetLike(inputs.at(0));
-    sum.SetValue(0.0f);
+    sum.SetValue(const_float_zero);
     for (size_t i = 0; i < inputs.size(); i++) {
       Tensor temp = inputs.at(i);
       CHECK_EQ(sum.nDim(), temp.nDim());

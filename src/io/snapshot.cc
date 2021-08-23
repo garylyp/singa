@@ -72,6 +72,7 @@ Snapshot::Snapshot(const std::string& prefix, Mode mode, int max_param_size /*in
       */
 
       CHECK(param_names_.count(key) == 0);
+      // LOG(INFO) << "Read param " << key;
       param_names_.insert(key);
       CHECK(tp.ParseFromString(val));
       param_map_[key].FromProto(tp);

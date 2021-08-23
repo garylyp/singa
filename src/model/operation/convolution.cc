@@ -384,7 +384,7 @@ Tensor CpuConvBackwardW(const Tensor &dy, const Tensor &x, const Tensor &W,
 /* // error due to importing Im2col
   Tensor dW;
   dW.ResetLike(W);
-  dW.SetValue(0.0f);
+  dW.SetValue(const_float_zero);
 
   Shape w_shape = W.shape();
   dW.Reshape(Shape{ch.num_filters, ch.col_height});
@@ -600,32 +600,26 @@ Tensor GpuConvForward(const Tensor &x, const Tensor &W, const Tensor &b,
   Shape shape{cch.batchsize, cch.num_filters, cch.conv_height, cch.conv_width};
   Tensor output(shape, dev, dtype);
 
-  output.device()->Exec(
-      [output, x, &W, &cch](Context *ctx) mutable {
-        Block *inblock = x.block(), *outblock = output.block(),
-              *wblock = W.block();
-        float alpha = 1.f, beta = 0.f;
-        cudnnConvolutionForward(ctx->cudnn_handle, &alpha, cch.x_desc,
-                                inblock->data(), cch.filter_desc,
-                                wblock->data(), cch.conv_desc, cch.fp_alg,
-                                cch.workspace.block()->mutable_data(),
-                                cch.workspace_count * SizeOf(x.data_type()), &beta,
-                                cch.y_desc, outblock->mutable_data());
-      },
-      {x.block(), W.block()}, {output.block(), cch.workspace.block()},
-      "cudnnConvForward");
+  output.device()->Exec([&output, &x, &W, &cch](Context * ctx) {
+    Block *inblock = x.block(), *outblock = output.block(),
+           *wblock = W.block();
+    float alpha = const_float_one, beta = const_float_zero;
+    cudnnConvolutionForward(ctx->cudnn_handle, &alpha, cch.x_desc,
+                            inblock->data(), cch.filter_desc, wblock->data(),
+                            cch.conv_desc, cch.fp_alg,
+                            cch.workspace.block()->mutable_data(),
+                            cch.workspace_count * sizeof(float), &beta,
+                            cch.y_desc, outblock->mutable_data());
+  }, {x.block(), W.block()}, {output.block(), cch.workspace.block()}, "cudnnConvForward");
 
   if (cch.bias_term) {
-    Tensor outputFake(output);
-    output.device()->Exec(
-        [output, outputFake, &b, &cch](Context *ctx) mutable {
-          float beta = 1.f, alpha = 1.0f;
-          Block *outblock = output.block(), *bblock = b.block();
-          cudnnAddTensor(ctx->cudnn_handle, &alpha, cch.bias_desc,
-                         bblock->data(), &beta, cch.y_desc,
-                         outblock->mutable_data());
-        },
-        {output.block(), b.block()}, {output.block()}, "cudnnAddTensor");
+    output.device()->Exec([&output, &b, &cch](Context * ctx) {
+      float beta = const_float_one, alpha = const_float_one;
+      Block *outblock = output.block(), *bblock = b.block();
+      cudnnAddTensor(ctx->cudnn_handle, &alpha, cch.bias_desc,
+                     bblock->data(), &beta, cch.y_desc,
+                     outblock->mutable_data());
+    }, {output.block(), b.block()}, {output.block()}, "cudnnAddTensor");
   }
 
   return output;
@@ -638,19 +632,17 @@ Tensor GpuConvBackwardx(const Tensor &dy, const Tensor &W, const Tensor &x,
   Tensor dx;
   dx.ResetLike(x);
 
-  dy.device()->Exec(
-      [dx, dy, &W, &cch](Context *ctx) mutable {
-        Block *wblock = W.block(), *dyblock = dy.block(), *dxblock = dx.block();
-        float alpha = 1.f, beta = 0.f;
-        cudnnConvolutionBackwardData(
-            ctx->cudnn_handle, &alpha, cch.filter_desc, wblock->data(),
-            cch.y_desc, dyblock->data(), cch.conv_desc, cch.bp_data_alg,
-            cch.workspace.block()->mutable_data(),
-            cch.workspace_count * SizeOf(dx.data_type()), &beta, cch.x_desc,
-            dxblock->mutable_data());
-      },
-      {dy.block(), W.block()}, {dx.block(), cch.workspace.block()},
-      "cudnnConvolutionBackwardData");
+  dy.device()->Exec([&dx, &dy, &W, &cch](Context * ctx) {
+    Block *wblock = W.block(), *dyblock = dy.block(),
+           *dxblock = dx.block();
+    float alpha = const_float_one, beta = const_float_zero;
+    cudnnConvolutionBackwardData(ctx->cudnn_handle, &alpha, cch.filter_desc,
+                                 wblock->data(), cch.y_desc, dyblock->data(),
+                                 cch.conv_desc, cch.bp_data_alg,
+                                 cch.workspace.block()->mutable_data(),
+                                 cch.workspace_count * sizeof(float), &beta,
+                                 cch.x_desc, dxblock->mutable_data());
+  }, {dy.block(), W.block()}, {dx.block(), cch.workspace.block()}, "cudnnConvolutionBackwardData");
 
   return dx;
 }
@@ -662,20 +654,17 @@ Tensor GpuConvBackwardW(const Tensor &dy, const Tensor &x, const Tensor &W,
   Tensor dW;
   dW.ResetLike(W);
 
-  dy.device()->Exec(
-      [dW, dy, x, &cch](Context *ctx) {
-        Block *inblock = x.block(), *dyblock = dy.block(),
-              *dwblock = dW.block();
-        float alpha = 1.f, beta = 0.f;
-        cudnnConvolutionBackwardFilter(
-            ctx->cudnn_handle, &alpha, cch.x_desc, inblock->data(), cch.y_desc,
-            dyblock->data(), cch.conv_desc, cch.bp_filter_alg,
-            cch.workspace.block()->mutable_data(),
-            cch.workspace_count * SizeOf(x.data_type()), &beta, cch.filter_desc,
-            dwblock->mutable_data());
-      },
-      {dy.block(), x.block()}, {dW.block(), cch.workspace.block()},
-      "cudnnConvolutionBackwardFilter");
+  dy.device()->Exec([&dW, &dy, &x, &cch](Context * ctx) {
+    Block *inblock = x.block(), *dyblock = dy.block(),
+           *dwblock = dW.block();
+    float alpha = const_float_one, beta = const_float_zero;
+    cudnnConvolutionBackwardFilter(
+      ctx->cudnn_handle, &alpha, cch.x_desc, inblock->data(),
+      cch.y_desc, dyblock->data(), cch.conv_desc, cch.bp_filter_alg,
+      cch.workspace.block()->mutable_data(),
+      cch.workspace_count * sizeof(float), &beta, cch.filter_desc,
+      dwblock->mutable_data());
+  }, {dy.block(), x.block()}, {dW.block(), cch.workspace.block()}, "cudnnConvolutionBackwardFilter");
 
   return dW;
 }
@@ -688,15 +677,13 @@ Tensor GpuConvBackwardb(const Tensor &dy, const Tensor &b,
   Tensor db;
   db.ResetLike(b);
 
-  dy.device()->Exec(
-      [dy, db, &cch](Context *ctx) mutable {
-        Block *dyblock = dy.block(), *dbblock = db.block();
-        float alpha = 1.f, beta = 0.f;
-        cudnnConvolutionBackwardBias(ctx->cudnn_handle, &alpha, cch.y_desc,
-                                     dyblock->data(), &beta, cch.bias_desc,
-                                     dbblock->mutable_data());
-      },
-      {dy.block()}, {db.block()}, "cudnnConvolutionBackwardBias");
+  dy.device()->Exec([&db, &dy, &cch](Context * ctx) {
+    Block *dyblock = dy.block(), *dbblock = db.block();
+    float alpha = const_float_one, beta = const_float_zero;
+    cudnnConvolutionBackwardBias(ctx->cudnn_handle, &alpha, cch.y_desc,
+                                 dyblock->data(), &beta, cch.bias_desc,
+                                 dbblock->mutable_data());
+  }, {dy.block()}, {db.block()}, "cudnnConvolutionBackwardBias");
 
   return db;
 }

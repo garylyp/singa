@@ -22,7 +22,9 @@
 #include <vector>
 #include <string>
 #include "singa/core/tensor.h"
+#ifndef LITE_POSIT
 #include "singa/proto/io.pb.h"
+#endif
 
 namespace singa {
 /// The base decoder that converts a string into a set of tensors.
