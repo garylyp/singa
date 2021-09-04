@@ -35,7 +35,7 @@
 
 #ifdef USE_CBLAS
 #undef USE_CBLAS
-// #include <cblas.h>
+#include <cblas.h>
 #endif
 
 #include "kernels.h"
@@ -447,10 +447,10 @@ void Exp<float, lang::Cpp>(const Tensor& in, Tensor *out, Context *ctx) {
   traverse_unary<float>(in, out, [](float x) {return my_exp(x);});
 }
 
-template <>
-void Exp<float, lang::Cpp>(const Tensor &in, Tensor *out, Context *ctx) {
-  traverse_unary<float>(in, out, [](float x) { return exp(x); });
-}
+// template <>
+// void Exp<float, lang::Cpp>(const Tensor &in, Tensor *out, Context *ctx) {
+//   traverse_unary<float>(in, out, [](float x) { return exp(x); });
+// }
 
 template <>
 void GE<float, lang::Cpp>(const Tensor &in, const float x, Tensor *out,
@@ -977,10 +977,17 @@ void GEMMBatched<float, lang::Cpp>(const float alpha, const Tensor &A,
   const float *BPtr = static_cast<const float *>(B.block()->data());
   float *CPtr = static_cast<float *>(C->block()->mutable_data());
 
+#ifdef USE_CBLAS
   auto transA = A.transpose();
   auto transa = transA ? CblasTrans : CblasNoTrans;
   auto transB = B.transpose();
   auto transb = transB ? CblasTrans : CblasNoTrans;
+#else
+  auto transA = A.transpose();
+  auto transa = transA ? MyCblasTrans : MyCblasNoTrans;
+  auto transB = B.transpose();
+  auto transb = transB ? MyCblasTrans : MyCblasNoTrans;
+#endif
 
   const size_t ncolB = B.shape().end()[-1];
   const size_t nrowA = A.shape().end()[-2];
@@ -1002,9 +1009,15 @@ void GEMMBatched<float, lang::Cpp>(const float alpha, const Tensor &A,
   auto offset_C = 0;
 
   for (int i = 0; i < group_size; i++) {
+#ifdef USE_CBLAS
     cblas_sgemm(CblasRowMajor, transa, transb, nrowA, ncolB, ncolA, alpha,
                 APtr + offset_A, lda, BPtr + offset_B, ldb, beta,
                 CPtr + offset_C, ldc);
+#else
+    my_cblas_sgemm(MyCblasRowMajor, transa, transb, nrowA, ncolB, ncolA, alpha,
+                APtr + offset_A, lda, BPtr + offset_B, ldb, beta,
+                CPtr + offset_C, ldc);
+#endif
     offset_A += matrix_stride_A;
     offset_B += matrix_stride_B;
     offset_C += matrix_stride_C;
@@ -1179,7 +1192,7 @@ void ComputeCrossEntropy<float, lang::Cpp>(bool int_target,
       for (size_t j = 0; j < dim; j++) {
         sum += tPtr[i * dim + j];
       }
-      float loss = const_float_zero;
+      float loss_value = const_float_zero;
       for (size_t j = 0, offset = i * dim; j < dim; j++, offset++) {
         loss_value -=
             tPtr[offset] / sum * std::log((std::max)(pPtr[offset], FLT_MIN));
