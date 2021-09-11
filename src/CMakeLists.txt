@@ -35,6 +35,7 @@ AUX_SOURCE_DIRECTORY(core/device core_source)
 AUX_SOURCE_DIRECTORY(core/memory core_source)
 AUX_SOURCE_DIRECTORY(core/scheduler core_source)
 AUX_SOURCE_DIRECTORY(core/tensor core_source)
+AUX_SOURCE_DIRECTORY(core/posit core_source)
 LIST(APPEND singa_sources ${core_source})
 
 IF (USE_DIST)
