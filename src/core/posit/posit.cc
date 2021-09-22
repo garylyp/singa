@@ -244,7 +244,7 @@ posit_t posit_add(posit_t a, posit_t b) {
     } 
 
     // Adjust to common exponent (b's exp) by raising a's fraction   
-    long numerator_a = (a.f + (1 << a.fs)) << exp_diff;
+    long numerator_a = ((long)a.f + ((long)1 << a.fs)) << exp_diff;
     long numerator_b = (b.f + (1 << b.fs));
 
     // Adjust to common fraction denominator by lowering a's fraction

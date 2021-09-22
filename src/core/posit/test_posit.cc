@@ -90,11 +90,20 @@ TEST(PositTest, Add) {
     std::vector<double> items = { 0, 1, 2, 4, 8, -1, -2, -4, 8, -8, -0.125, 0.125};
     for (uint i = 0; i < items.size(); i++) {
         for (uint j = 0; j < items.size(); j++) {
-            cout << items[i] << " " << items[j] << " " << (items[i] + items[j]) << endl;
+            // cout << items[i] << " " << items[j] << " " << (items[i] + items[j]) << endl;
             EXPECT_DOUBLE_EQ(items[i] + items[j], test_add(items[i], items[j]));
-            cout << endl;
+            // cout << endl;
         }
     }
+    // // { 1, 1000000000, 0.000000001, -1, -1000000000, -0.000000001 };
+    // items = { 7, 29, 53, 0.29, 3.14, -3, -12.3, -0.569 };
+    // for (uint i = 0; i < items.size(); i++) {
+    //     for (uint j = 0; j < items.size(); j++) {
+    //         // cout << items[i] << " " << items[j] << " " << (items[i] + items[j]) << endl;
+    //         EXPECT_DOUBLE_EQ(items[i] + items[j], test_add(items[i], items[j]));
+    //         cout << endl;
+    //     }
+    // }
 }
 
 TEST(PositTest, int_log2) {
