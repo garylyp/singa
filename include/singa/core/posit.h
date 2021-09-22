@@ -58,6 +58,8 @@ posit_t posit_add(posit_t a, posit_t b);
 // posit_t posit_mul(posit_t a, posit_t b);
 // posit_t posit_div(posit_t x, posit_t y);
 
+uint32_t int_log2 (uint32_t val);
+
 extern posit_t posit_zero;
 extern posit_t posit_nar;
 }

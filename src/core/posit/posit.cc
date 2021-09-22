@@ -1,4 +1,5 @@
 #include "singa/core/posit.h"
+#include <limits.h>
 
 using namespace std;
 
@@ -13,6 +14,7 @@ namespace singa {
 
 #define IS_POSIT_ZERO(flags) ((flags & 2) != 0)
 #define SET_POSIT_ZERO(flags) flags |= 2
+#define SET_POSIT_NONZERO(flags) flags &= 0xFD
 #define TOGGLE_POSIT_ZERO(flags) flags ^= 2
 
 #define IS_POSIT_NAR(flags) ((flags & 4) != 0)
@@ -144,6 +146,7 @@ posit_t double_to_posit(double x, uint8_t ps, uint8_t es) {
         fs = 0;
 
     posit_t ret;
+    ret.flags = 0;
     if (sign_bit)
         SET_POSIT_SIGN_NEGATIVE(ret.flags);
     else
@@ -220,4 +223,114 @@ posit_t posit_min(posit_t a, posit_t b) {
         : b;
 }
 
+posit_t posit_add(posit_t a, posit_t b) {
+    // // if diff in exp > (ps - es - 1 - 2), just return the one with larger exponent
+    // int max_fs_diff = a.ps - 2 - 1 - a.es;
+    if (IS_POSIT_ZERO(a.flags)) {
+        return b;
+    } else if (IS_POSIT_ZERO(b.flags)) {
+        return a;
+    }
+    
+    // Diff in exponent
+    int exp_diff = a.exp - b.exp;
+
+    // We make 'a' the one with the higher exponent
+    posit_t c = a;
+    if (exp_diff < 0) {
+        a = b;
+        b = c;
+        exp_diff = -exp_diff;
+    } 
+
+    // Adjust to common exponent (b's exp) by raising a's fraction   
+    long numerator_a = (a.f + (1 << a.fs)) << exp_diff;
+    long numerator_b = (b.f + (1 << b.fs));
+
+    // Adjust to common fraction denominator by lowering a's fraction
+    int fs_diff = b.fs - a.fs;
+    numerator_a = numerator_a << fs_diff;
+
+    // Adjust fraction sign
+    numerator_a = numerator_a * GET_POSIT_SIGN(a.flags);
+    numerator_b = numerator_b * GET_POSIT_SIGN(b.flags);
+
+    // Add
+    long numerator_sum = numerator_a + numerator_b; // new f, but unadjusted and might be too large / negative
+
+    // Prepare result
+    posit_t res;
+    res.flags = 0;
+    int is_neg = numerator_sum < 0;
+    
+    res.flags |= (is_neg * 1);
+    numerator_sum = numerator_sum * (is_neg * -1 + (1-is_neg));
+
+    int is_zero = (IS_POSIT_ZERO(a.flags) & IS_POSIT_ZERO(b.flags)) | (numerator_sum == 0);    
+    res.flags |= (is_zero * 2);
+
+    // Update exp
+    int numerator_exp = log2(numerator_sum);
+    // over/under-flowed exponent to be shifted from numerator to exp
+    int overflowed_exp = numerator_exp - b.fs; 
+    res.exp = b.exp + overflowed_exp; 
+#ifdef PDEBUG
+    cout << "res.exp: " << (int)res.exp << endl; 
+#endif
+	res.e = res.exp % (1 << a.es);
+	res.r = res.exp / (1 << a.es);
+    
+    // Adjust e and r for edge cases when exp is negative
+    int adjust_r = ((res.e == 0) * (res.exp < 0)); 
+    res.r = res.r + adjust_r;
+    int adjust_e = ((res.e != 0) * (res.exp < 0) * 8); 
+    res.e = res.e + adjust_e;
+    int rs = (res.r < 0) * (-res.r + 1) + (res.r >= 0) * (res.r + 2);
+#ifdef PDEBUG
+    cout << "res.r: " << (int)res.r << endl;
+    cout << "res.e: " << (int)res.e << endl;
+#endif
+    // Check whether exp exceeds range
+    int max_rs = a.ps - a.es - 1;
+    int is_nar = rs > max_rs;
+    res.flags |= (is_nar * 4);
+
+    // Adjust fraction for overflowed exponent
+    numerator_sum = numerator_sum >> ((overflowed_exp > 0) * overflowed_exp);
+    numerator_sum = numerator_sum << ((overflowed_exp <= 0) * -overflowed_exp);
+    numerator_sum = numerator_sum - (1 << b.fs); // minus 1 from the fraction (minus denominator off numerator)
+    res.ps = a.ps;
+    res.es = a.es;
+    res.fs = res.ps - res.es - rs;
+
+#ifdef PDEBUG
+    cout << "numer: " << numerator_sum << endl;
+    cout << "denom: " << (1<<b.fs) << endl;
+#endif
+    
+    // Might unncessarily truncate some items, need more tests
+    numerator_sum = numerator_sum << ((res.fs > b.fs) * (res.fs - b.fs));
+    numerator_sum = numerator_sum >> ((res.fs <= b.fs) * (b.fs - res.fs));
+
+    res.f = numerator_sum;
+#ifdef PDEBUG
+    cout << "numer: " << numerator_sum << endl;
+    cout << "denom: " << (1<<res.fs) << endl;
+#endif
+
+    return res;
+}
+
+
+
+uint32_t int_log2 (uint32_t val) {
+    if (val == 0) return UINT_MAX;
+    if (val == 1) return 0;
+    uint32_t ret = 0;
+    while (val > 1) {
+        val >>= 1;
+        ret++;
+    }
+    return ret;
+}
 };

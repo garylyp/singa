@@ -1,6 +1,7 @@
 #include <iostream>
+#include <vector>
 #include <singa/core/posit.h>
-#include "gtest/gtest.h"
+#include "../../test/gtest/gtest.h"
 
 using namespace std;
 using namespace singa;
@@ -16,6 +17,10 @@ posit_t dummy_posit_nar() {
 posit_t dummy_posit_00() {
     posit_t x = posit_zero;
     return x;
+}
+
+double test_add(double a, double b) {
+    return posit_to_double(posit_add(double_to_posit(a), double_to_posit(b)));
 }
 
 
@@ -78,6 +83,26 @@ TEST(PositTest, EqualityByFrac) {
     posit_t d = double_to_posit(-0.125);
     EXPECT_TRUE(posit_is_less_than(c, d));
     EXPECT_TRUE(posit_is_less_than_equal(c, d));
+}
+
+TEST(PositTest, Add) {
+    
+    std::vector<double> items = { 0, 1, 2, 4, 8, -1, -2, -4, 8, -8, -0.125, 0.125};
+    for (uint i = 0; i < items.size(); i++) {
+        for (uint j = 0; j < items.size(); j++) {
+            cout << items[i] << " " << items[j] << " " << (items[i] + items[j]) << endl;
+            EXPECT_DOUBLE_EQ(items[i] + items[j], test_add(items[i], items[j]));
+            cout << endl;
+        }
+    }
+}
+
+TEST(PositTest, int_log2) {
+    EXPECT_EQ(0, int_log2(1));
+    EXPECT_EQ(1, int_log2(2));
+    EXPECT_EQ(7, int_log2(255));
+    EXPECT_EQ(8, int_log2(256));
+    EXPECT_EQ(8, int_log2(257));
 }
 
 GTEST_API_ int main(int argc, char **argv) {
