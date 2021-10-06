@@ -9,6 +9,23 @@ namespace singa {
 
 #define DEFAULT_PS  32  // 32-bit posit
 #define DEFAULT_ES  3   // 3-bit exponent
+
+#define IS_POSIT_NEG(flags) ((flags & 1) == 1)
+#define IS_POSIT_POS(flags) ((flags & 1) == 0)
+#define SET_POSIT_SIGN_POSITIVE(flags) flags &= 0xFE
+#define SET_POSIT_SIGN_NEGATIVE(flags) flags |= 1
+#define TOGGLE_POSIT_SIGN(flags) flags ^= 1
+#define GET_POSIT_SIGN(flags) (((flags & 1) == 0) ? 1 : -1)
+
+#define IS_POSIT_ZERO(flags) ((flags & 2) != 0)
+#define SET_POSIT_ZERO(flags) flags |= 2
+#define SET_POSIT_NONZERO(flags) flags &= 0xFD
+#define TOGGLE_POSIT_ZERO(flags) flags ^= 2
+
+#define IS_POSIT_NAR(flags) ((flags & 4) != 0)
+#define SET_POSIT_NAR(flags) flags |= 4
+#define TOGGLE_POSIT_NAR(flags) flags ^= 4
+
 struct posit_t;
 
 struct posit_t {
@@ -54,32 +71,18 @@ posit_t posit_neg(posit_t x);
 posit_t posit_max(posit_t a, posit_t b);
 posit_t posit_min(posit_t a, posit_t b);
 posit_t posit_add(posit_t a, posit_t b);
-// posit_t posit_sub(posit_t a, posit_t b);
-// posit_t posit_mul(posit_t a, posit_t b);
-// posit_t posit_div(posit_t x, posit_t y);
+posit_t posit_sub(posit_t a, posit_t b);
+posit_t posit_mul(posit_t a, posit_t b);
+posit_t posit_div(posit_t x, posit_t y);
 
 
-enum err_code_t {
-	no_err = 0,
-	wrong_params = 1,
-	wrong_binary = 2,
-	exponent_space = 3,
-	posit_space = 4,
-	supra_max = 5,
-	sub_min = 6,
-	special_posit = 7
-};
 
-enum special_posit_t {
-	POSIT_ZERO = 0,
-	POSIT_NAR = 1,
-	POSIT_NOT_SPECIAL = 2
-};
-uint32_t encode_posit(int n, int es, double val, int* err);
-void pack_posit(posit_t p, uint32_t* posit, int* err);
 
 extern posit_t posit_zero;
 extern posit_t posit_nar;
+extern posit_t posit_max_value;
+extern posit_t posit_min_value;
+
 }
 
 
