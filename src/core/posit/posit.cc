@@ -1,30 +1,16 @@
-#include "singa/core/posit.h"
 #include <limits.h>
+#include "singa/core/posit.h"
+#include "posit_helper.h"
 
 using namespace std;
 
 namespace singa {
 
-#define IS_POSIT_NEG(flags) ((flags & 1) == 1)
-#define IS_POSIT_POS(flags) ((flags & 1) == 0)
-#define SET_POSIT_SIGN_POSITIVE(flags) flags &= 0xFE
-#define SET_POSIT_SIGN_NEGATIVE(flags) flags |= 1
-#define TOGGLE_POSIT_SIGN(flags) flags ^= 1
-#define GET_POSIT_SIGN(flags) (((flags & 1) == 0) ? 1 : -1)
-
-#define IS_POSIT_ZERO(flags) ((flags & 2) != 0)
-#define SET_POSIT_ZERO(flags) flags |= 2
-#define SET_POSIT_NONZERO(flags) flags &= 0xFD
-#define TOGGLE_POSIT_ZERO(flags) flags ^= 2
-
-#define IS_POSIT_NAR(flags) ((flags & 4) != 0)
-#define SET_POSIT_NAR(flags) flags |= 4
-#define TOGGLE_POSIT_NAR(flags) flags ^= 4
 
 posit_t posit_zero;
 posit_t posit_one;
-posit_t posit_minimum;
-posit_t posit_maximum;
+posit_t posit_min_value;
+posit_t posit_max_value;
 posit_t posit_nar;
 
 void posit_init() {
@@ -40,25 +26,26 @@ void posit_init() {
     
     // posit_one = posit_from_int(1);
 
-    // // maximum positive posit  
-    // posit_maximum.ps = DEFAULT_PS;
-    // posit_maximum.es = DEFAULT_ES;
-    // SET_POSIT_SIGN_POSITIVE(posit_maximum.flags);
-    // posit_maximum.e = ((1 << DEFAULT_ES) - 1);
-    // posit_maximum.k = DEFAULT_PS - DEFAULT_ES - 3;
-    // posit_maximum.exp = posit_maximum.k * (1 << DEFAULT_ES) + posit_maximum.e;
-    // posit_maximum.fs = 0;
-    // posit_maximum.f = 0;
+    int max_rs = DEFAULT_PS - DEFAULT_ES - 1;
+    // maximum positive posit  
+    posit_max_value.ps = DEFAULT_PS;
+    posit_max_value.es = DEFAULT_ES;
+    SET_POSIT_SIGN_POSITIVE(posit_max_value.flags);
+    posit_max_value.e = ((1 << DEFAULT_ES) - 1);
+    posit_max_value.r = max_rs - 2;
+    posit_max_value.exp = posit_max_value.r * (1 << DEFAULT_ES) + posit_max_value.e;
+    posit_max_value.fs = 0;
+    posit_max_value.f = 0;
 
-    // // minimum positive posit
-    // posit_minimum.ps = DEFAULT_PS;
-    // posit_minimum.es = DEFAULT_ES;
-    // SET_POSIT_SIGN_POSITIVE(posit_minimum.flags);
-    // posit_minimum.e = 0;
-    // posit_minimum.k = 2 + DEFAULT_ES - DEFAULT_PS;
-    // posit_minimum.exp = posit_maximum.k * (1 << DEFAULT_ES) + posit_maximum.e;
-    // posit_minimum.fs = 0;
-    // posit_minimum.fraction = 0;
+    // minimum positive posit
+    posit_min_value.ps = DEFAULT_PS;
+    posit_min_value.es = DEFAULT_ES;
+    SET_POSIT_SIGN_POSITIVE(posit_min_value.flags);
+    posit_min_value.e = 0;
+    posit_min_value.r = 1 - max_rs;
+    posit_min_value.exp = posit_min_value.r * (1 << DEFAULT_ES) + posit_min_value.e;
+    posit_min_value.fs = 0;
+    posit_min_value.f = 0;
 }
 
 
@@ -86,12 +73,12 @@ posit_t double_to_posit(double x, uint8_t ps, uint8_t es) {
         return posit_nar;
     }
 
-    double val = abs(x);
+    double val = ((x<0) * -x) + ((x>=0) * x);
     uint8_t sign_bit = x < 0.0;
 
     // exp - total exponent: exp = r * 2^es + e
     int exp = (int)log2(val);
-    if (exp <= 0 && exp > log2(val)) // What is this step?
+    if (exp <= 0 && exp > log2(val)) 
         exp--;
     // e_max - the maximum value of the exponent field (2^es)
     int e_max = (1<<es);
@@ -100,9 +87,18 @@ posit_t double_to_posit(double x, uint8_t ps, uint8_t es) {
     // e - value of exponent field in posit
     int e = exp - r * e_max;
     
-    // Correction for the case where exp is neg and is NOT a mult of e_max
-    r = e < 0 ? r - 1 : r;
-    e = exp - r * e_max;
+    // // Correction for the case where exp is neg and is NOT a mult of e_max
+    // r = e < 0 ? r - 1 : r;
+    // e = exp - r * e_max;
+	if (e < 0) {
+		r--;
+		e = exp - r * e_max;
+	}
+	if (e > e_max) {
+		r++;
+		e = exp - r * e_max;
+	}
+
 
     // The following might not be necessary
     // if (e >= e_max) {
@@ -224,113 +220,202 @@ posit_t posit_min(posit_t a, posit_t b) {
 }
 
 posit_t posit_add(posit_t a, posit_t b) {
-    // // if diff in exp > (ps - es - 1 - 2), just return the one with larger exponent
-    // int max_fs_diff = a.ps - 2 - 1 - a.es;
     if (IS_POSIT_ZERO(a.flags)) {
         return b;
     } else if (IS_POSIT_ZERO(b.flags)) {
         return a;
     }
+
+    // Full numerator
+    long numerator_a = ((long)a.f + ((long)1 << a.fs));
+    long numerator_b = ((long)b.f + ((long)1 << b.fs));
+
+    // Diff in fraction size
+    int fs_diff = b.fs - a.fs;
+    // Base fs is the larger fs
+    int fs_base = ((fs_diff >= 0) * b.fs) + ((fs_diff < 0) * a.fs);
+
+    numerator_a = numerator_a << ((fs_diff >= 0) * fs_diff);
+    numerator_b = numerator_b << ((fs_diff < 0) * -fs_diff);
     
     // Diff in exponent
     int exp_diff = a.exp - b.exp;
+    // Base exp is the smaller exp
+    int exp_base = ((exp_diff >= 0) * b.exp) + ((exp_diff < 0) * a.exp);
 
-    // We make 'a' the one with the higher exponent
-    posit_t c = a;
-    if (exp_diff < 0) {
-        a = b;
-        b = c;
-        exp_diff = -exp_diff;
-    } 
-
-    // Adjust to common exponent (b's exp) by raising a's fraction   
-    long numerator_a = ((long)a.f + ((long)1 << a.fs)) << exp_diff;
-    long numerator_b = (b.f + (1 << b.fs));
-
-    // Adjust to common fraction denominator by lowering a's fraction
-    int fs_diff = b.fs - a.fs;
-    numerator_a = numerator_a << fs_diff;
+    numerator_a = numerator_a << ((exp_diff >= 0) * exp_diff);
+    numerator_b = numerator_b << ((exp_diff < 0) * -exp_diff);
+    
+#ifdef PDEBUG
+    printf("exp_diff: %d\n", exp_diff);
+    printf("fs_diff:  %d\n", fs_diff);
+#endif
 
     // Adjust fraction sign
     numerator_a = numerator_a * GET_POSIT_SIGN(a.flags);
     numerator_b = numerator_b * GET_POSIT_SIGN(b.flags);
 
-    // Add
-    long numerator_sum = numerator_a + numerator_b; // new f, but unadjusted and might be too large / negative
+    // Result of fraction addition
+    long numerator_sum = numerator_a + numerator_b; 
+#ifdef PDEBUG
+    printf("numerator_a: %lx\n", numerator_a);
+    printf("numerator_b: %lx\n", numerator_b);
+    printf("numerator_s: %lx\n", numerator_sum);
+#endif
 
     // Prepare result
     posit_t res;
     res.flags = 0;
     int is_neg = numerator_sum < 0;
-    
     res.flags |= (is_neg * 1);
     numerator_sum = numerator_sum * (is_neg * -1 + (1-is_neg));
-
+#ifdef PDEBUG
+    printf("numerator_s: %lx\n", numerator_sum);
+#endif
     int is_zero = (IS_POSIT_ZERO(a.flags) & IS_POSIT_ZERO(b.flags)) | (numerator_sum == 0);    
     res.flags |= (is_zero * 2);
 
     // Update exp
-    int numerator_exp = log2(numerator_sum);
-    // over/under-flowed exponent to be shifted from numerator to exp
-    int overflowed_exp = numerator_exp - b.fs; 
-    res.exp = b.exp + overflowed_exp; 
+    int numerator_exp = (int) log2(numerator_sum);
+    long mantissa = numerator_sum - ((long)1 << numerator_exp);
+    res.exp = numerator_exp + exp_base - fs_base;
 #ifdef PDEBUG
-    cout << "res.exp: " << (int)res.exp << endl; 
+    printf("mantissa:  %lx\n", mantissa);
 #endif
+
 	res.e = res.exp % (1 << a.es);
 	res.r = res.exp / (1 << a.es);
     
     // Adjust e and r for edge cases when exp is negative
-    int adjust_r = ((res.e == 0) * (res.exp < 0)); 
-    res.r = res.r + adjust_r;
-    int adjust_e = ((res.e != 0) * (res.exp < 0) * 8); 
-    res.e = res.e + adjust_e;
+    int adjust_r = ((res.exp < 0) * (res.e != 0) * -1);
+    res.r = res.r + adjust_r; // Add 1 to r if exp < 0 and e != 0
+    int adjust_e = ((res.exp < 0) * (res.e != 0) * 8); 
+    res.e = res.e + adjust_e; // Add 8 to e if exp < 0 and e != 0
+    
+    // rs = -r + 1 if r < 0 else r + 2
     int rs = (res.r < 0) * (-res.r + 1) + (res.r >= 0) * (res.r + 2);
-#ifdef PDEBUG
-    cout << "res.r: " << (int)res.r << endl;
-    cout << "res.e: " << (int)res.e << endl;
-#endif
     // Check whether exp exceeds range
     int max_rs = a.ps - a.es - 1;
     int is_nar = rs > max_rs;
     res.flags |= (is_nar * 4);
 
+    res.fs = a.ps - a.es - rs - 1;
+
     // Adjust fraction for overflowed exponent
-    numerator_sum = numerator_sum >> ((overflowed_exp > 0) * overflowed_exp);
-    numerator_sum = numerator_sum << ((overflowed_exp <= 0) * -overflowed_exp);
-    numerator_sum = numerator_sum - (1 << b.fs); // minus 1 from the fraction (minus denominator off numerator)
+    int adjust_f = res.fs - numerator_exp;
+    mantissa = mantissa << ((adjust_f > 0) * adjust_f);
+    mantissa = mantissa >> ((adjust_f < 0) * -adjust_f);
+    res.f = mantissa;
     res.ps = a.ps;
     res.es = a.es;
-    res.fs = res.ps - res.es - rs;
 
 #ifdef PDEBUG
-    cout << "numer: " << numerator_sum << endl;
-    cout << "denom: " << (1<<b.fs) << endl;
-#endif
-    
-    // Might unncessarily truncate some items, need more tests
-    numerator_sum = numerator_sum << ((res.fs > b.fs) * (res.fs - b.fs));
-    numerator_sum = numerator_sum >> ((res.fs <= b.fs) * (b.fs - res.fs));
-
-    res.f = numerator_sum;
-#ifdef PDEBUG
-    cout << "numer: " << numerator_sum << endl;
-    cout << "denom: " << (1<<res.fs) << endl;
+    printf("adjust_f:  %d\n", adjust_f);
+    printf("res.exp:  %d\n", (int)res.exp);
+    printf("res.f:    %d\n", (int)res.f);
+    printf("res.fs:   %li\n", ((long)1 << res.fs));    
+    printf("res.frac: %lf\n", ((double)res.f / (double)((long)1 << res.fs)));    
 #endif
 
     return res;
 }
 
-
-
-uint32_t int_log2 (uint32_t val) {
-    if (val == 0) return UINT_MAX;
-    if (val == 1) return 0;
-    uint32_t ret = 0;
-    while (val > 1) {
-        val >>= 1;
-        ret++;
-    }
-    return ret;
+posit_t posit_sub(posit_t a, posit_t b) {
+    return posit_add(a, posit_neg(b));
 }
+
+posit_t posit_mul(posit_t a, posit_t b) {
+    if (IS_POSIT_ZERO(a.flags) || IS_POSIT_ZERO(b.flags)) {
+        return posit_zero;
+    } 
+
+    long numerator_a = ((long)a.f + ((long)1 << a.fs));
+    long numerator_b = ((long)b.f + ((long)1 << b.fs));
+    unsigned long numerator_prod = numerator_a * numerator_b;
+    int numerator_exp = log2(numerator_prod);
+    long mantissa = numerator_prod - ((long)1 << numerator_exp);
+
+    posit_t res;
+    int is_neg = (GET_POSIT_SIGN(a.flags) * GET_POSIT_SIGN(b.flags)) < 0;
+    res.flags |= (is_neg * 1);
+
+    res.exp = a.exp + b.exp + numerator_exp - a.fs - b.fs;
+	res.e = res.exp % (1 << a.es);
+	res.r = res.exp / (1 << a.es);
+    
+    // Adjust e and r for edge cases when exp is negative
+    int adjust_r = ((res.exp < 0) * (res.e != 0) * -1);
+    res.r = res.r + adjust_r; // Add 1 to r if exp < 0 and e != 0
+    int adjust_e = ((res.exp < 0) * (res.e != 0) * 8); 
+    res.e = res.e + adjust_e; // Add 8 to e if exp < 0 and e != 0
+
+    // rs = -r + 1 if r < 0 else r + 2
+    int rs = (res.r < 0) * (-res.r + 1) + (res.r >= 0) * (res.r + 2);
+    // Check whether exp exceeds range
+    int max_rs = a.ps - a.es - 1;
+    int is_nar = rs > max_rs;
+    res.flags |= (is_nar * 4);
+
+    res.fs = a.ps - a.es - rs - 1;
+
+    // Adjust fraction for overflowed exponent
+    int adjust_f = res.fs - numerator_exp;
+    mantissa = mantissa << ((adjust_f > 0) * adjust_f);
+    mantissa = mantissa >> ((adjust_f < 0) * -adjust_f);
+    res.f = mantissa;
+    res.ps = a.ps;
+    res.es = a.es;
+
+    return res;
+}
+
+posit_t posit_div(posit_t a, posit_t b) {
+    if (IS_POSIT_ZERO(b.flags)) {
+        return posit_nar;
+    } 
+    if (IS_POSIT_ZERO(a.flags)) {
+        return posit_zero;
+    }
+
+    long numerator_a = ((long)a.f + ((long)1 << a.fs));
+    long numerator_b = ((long)b.f + ((long)1 << b.fs));
+    unsigned long numerator_prod = numerator_a * ((long)1 << b.fs) / numerator_b; // this can cause issues
+    int numerator_exp = log2(numerator_prod);
+    long mantissa = numerator_prod - ((long)1 << numerator_exp);
+
+    posit_t res;
+    int is_neg = (GET_POSIT_SIGN(a.flags) * GET_POSIT_SIGN(b.flags)) < 0;
+    res.flags |= (is_neg * 1);
+
+    res.exp = a.exp - b.exp + numerator_exp - a.fs;
+	res.e = res.exp % (1 << a.es);
+	res.r = res.exp / (1 << a.es);
+    
+    // Adjust e and r for edge cases when exp is negative
+    int adjust_r = ((res.exp < 0) * (res.e != 0) * -1);
+    res.r = res.r + adjust_r; // Add 1 to r if exp < 0 and e != 0
+    int adjust_e = ((res.exp < 0) * (res.e != 0) * 8); 
+    res.e = res.e + adjust_e; // Add 8 to e if exp < 0 and e != 0
+
+    // rs = -r + 1 if r < 0 else r + 2
+    int rs = (res.r < 0) * (-res.r + 1) + (res.r >= 0) * (res.r + 2);
+    // Check whether exp exceeds range
+    int max_rs = a.ps - a.es - 1;
+    int is_nar = rs > max_rs;
+    res.flags |= (is_nar * 4);
+
+    res.fs = a.ps - a.es - rs - 1;
+
+    // Adjust fraction for overflowed exponent
+    int adjust_f = res.fs - numerator_exp;
+    mantissa = mantissa << ((adjust_f > 0) * adjust_f);
+    mantissa = mantissa >> ((adjust_f < 0) * -adjust_f);
+    res.f = mantissa;
+    res.ps = a.ps;
+    res.es = a.es;
+
+    return res;
+}
+
+
 };
